@@ -31,9 +31,6 @@ $src = htmlspecialchars(
     $CFG_GLPI['root_doc'] . '/plugins/operacional360/front/op360.php' . ($query ? '?' . http_build_query($query) : '?p=/'),
     ENT_QUOTES
 );
-$config = Session::haveRight('config', UPDATE)
-    ? '<a class="btn btn-sm btn-outline-secondary" href="' . htmlspecialchars(Menu::CONFIG_PAGE, ENT_QUOTES) . '"><i class="ti ti-settings me-1"></i>Configurar</a>'
-    : '';
 
 echo <<<HTML
     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -42,7 +39,6 @@ echo <<<HTML
             Painel operacional por cliente: chamados do GLPI e alertas do Zabbix dos host groups
         </div>
         <div class="d-flex gap-2">
-            $config
             <a class="btn btn-sm btn-outline-secondary" href="$src" target="_blank" rel="noopener">
                 <i class="ti ti-external-link me-1"></i>Abrir em tela cheia
             </a>
