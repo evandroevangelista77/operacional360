@@ -66,6 +66,7 @@ class Scope
             'short'      => Glpi::lastSegment($rootName),
             'entity_ids' => $entityIds,
             'clients'    => $clients,
+            'folders'    => Glpi::clientFolders($rootId),
             'groups'     => $groups,
             'all_groups' => $all,
             'picked'     => $picked,

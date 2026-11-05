@@ -137,7 +137,10 @@
     bar.innerHTML = n ? `<span class="sel-lbl">Exibindo ${n === 1 ? 'o cliente' : `os ${n} clientes`}:</span>`
       + state.clients.map((c) => `<button type="button" class="chip" data-client="${esc(c)}" title="Remover ${esc(c)}">${esc(c)} <em aria-hidden="true">×</em></button>`).join('')
       + '<button type="button" class="chip clear" data-client-all>Ver todos os clientes</button>' : '';
-    $$('#clientList input[type="checkbox"]').forEach((cb) => { cb.checked = state.clients.includes(cb.value); });
+    $$('#clientList input[type="checkbox"]').forEach((cb) => {
+      if (cb.dataset.folder) { const k = folderKids(cb.dataset.folder); const n2 = k.filter((c) => state.clients.includes(c)).length; cb.checked = n2 > 0 && n2 === k.length; cb.indeterminate = n2 > 0 && n2 < k.length; }
+      else cb.checked = state.clients.includes(cb.value);
+    });
   }
 
   /* ---------------- KPIs com contagem animada */
@@ -179,7 +182,7 @@
     setKpi('mttr_zbx', dur(k.mttr_zbx), k.mttr_zbx_n ? `${nf.format(k.mttr_zbx_n)} alertas · até recuperar` : 'sem recuperações');
     setKpi('mttr_glpi', dur(k.mttr_glpi), k.mttr_glpi_n ? `${nf.format(k.mttr_glpi_n)} chamados · até solucionar` : 'sem chamados');
 
-    fillClients(d.clients);
+    fillClients(d.clients, d.folders);
     fillGroups(d.hostgroups, d.groups_in_use);
     renderSources(d);
     renderTicker(d.active);
@@ -196,23 +199,41 @@
   }
 
   /** Lista de clientes do seletor (entidades logo abaixo da raiz), com a contagem de cada um; escolhas que não existem mais saem. */
-  let clientRows = [];
-  function fillClients(clients) {
-    clientRows = clients || [];
+  let clientRows = [], clientFolders = {}, openFolders = new Set();
+  function fillClients(clients, folders) {
+    clientRows = clients || []; clientFolders = folders || {};
     const known = new Set(clientRows.map((c) => c.name));
     const kept = state.clients.filter((c) => known.has(c));
     if (kept.length !== state.clients.length) { state.clients = kept; saveClients(); writeUrl(); }
     drawClientList();
     renderClientSel();
   }
+  const folderKids = (f) => clientRows.filter((c) => clientFolders[c.name] === f).map((c) => c.name);
+  const clientItem = (c, cls = '') => `
+      <label class="cp-item ${cls}"><input type="checkbox" value="${esc(c.name)}" ${state.clients.includes(c.name) ? 'checked' : ''}>
+        <span title="${esc(c.name)}">${esc(c.name)}</span>
+        <small>${c.tickets + c.open + c.alerts ? `${nf.format(c.tickets)} ch. · ${nf.format(c.alerts)} al.` : ''}</small></label>`;
+  /** Clientes soltos e, em pastas do GLPI (ex.: CLIENTES AXON), os clientes de dentro: a pasta abre e seleciona todos de uma vez. */
   function drawClientList() {
     const term = $('#clientSearch').value.trim().toLowerCase();
-    const rows = clientRows.filter((c) => !term || c.name.toLowerCase().includes(term));
-    $('#clientList').innerHTML = rows.length ? rows.map((c) => `
-      <label class="cp-item"><input type="checkbox" value="${esc(c.name)}" ${state.clients.includes(c.name) ? 'checked' : ''}>
-        <span title="${esc(c.name)}">${esc(c.name)}</span>
-        <small>${c.tickets + c.open + c.alerts ? `${nf.format(c.tickets)} ch. · ${nf.format(c.alerts)} al.` : ''}</small></label>`).join('')
-      : '<div class="cp-empty">Nenhum cliente encontrado.</div>';
+    const hit = (c) => !term || c.name.toLowerCase().includes(term);
+    const folders = [...new Set(Object.values(clientFolders))];
+    const loose = clientRows.filter((c) => !clientFolders[c.name] && hit(c));
+    const out = [];
+    folders.forEach((f) => {
+      const all = folderKids(f), kids = clientRows.filter((c) => clientFolders[c.name] === f && (hit(c) || f.toLowerCase().includes(term)));
+      if (term && !kids.length) return;
+      const sel = all.filter((c) => state.clients.includes(c)).length;
+      const open = !!term || openFolders.has(f) || sel > 0;
+      out.push(`<div class="cp-folder${open ? ' open' : ''}">
+        <label class="cp-item cp-head"><input type="checkbox" data-folder="${esc(f)}" ${all.length && sel === all.length ? 'checked' : ''}>
+          <button type="button" class="cp-caret" data-open="${esc(f)}" aria-label="Abrir ou fechar ${esc(f)}" aria-expanded="${open}"></button>
+          <span title="${esc(f)}">${esc(f)}</span><small>${sel ? `${sel}/` : ''}${all.length} clientes</small></label>
+        ${open ? kids.map((c) => clientItem(c, 'cp-sub')).join('') : ''}</div>`);
+    });
+    out.push(...loose.map((c) => clientItem(c)));
+    $('#clientList').innerHTML = out.length ? out.join('') : '<div class="cp-empty">Nenhum cliente encontrado.</div>';
+    $$('#clientList input[data-folder]').forEach((cb) => { const k = folderKids(cb.dataset.folder); const n2 = k.filter((c) => state.clients.includes(c)).length; cb.indeterminate = n2 > 0 && n2 < k.length; });
   }
   function openClientPop(open) {
     $('#clientPop').hidden = !open;
@@ -597,7 +618,21 @@
     groupsChanged();
   });
   document.addEventListener('click', (ev) => { if (!$('#groupPop').hidden && !ev.target.closest('#groupPick')) openGroupPop(false); });
-  $('#clientList').addEventListener('change', (ev) => { const cb = ev.target.closest('input[type="checkbox"]'); if (cb) toggleClient(cb.value, cb.checked); });
+  $('#clientList').addEventListener('click', (ev) => {
+    const c = ev.target.closest('.cp-caret'); if (!c) return;
+    ev.preventDefault(); const f = c.dataset.open;
+    if (openFolders.has(f)) openFolders.delete(f); else openFolders.add(f);
+    drawClientList();
+  });
+  $('#clientList').addEventListener('change', (ev) => {
+    const cb = ev.target.closest('input[type="checkbox"]'); if (!cb) return;
+    if (cb.dataset.folder) {
+      const kids = folderKids(cb.dataset.folder);
+      state.clients = cb.checked ? [...new Set([...state.clients, ...kids])] : state.clients.filter((x) => !kids.includes(x));
+      if (cb.checked) openFolders.add(cb.dataset.folder);
+      clientsChanged(); drawClientList();
+    } else toggleClient(cb.value, cb.checked);
+  });
   $('#clientChips').addEventListener('click', (ev) => {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.hasAttribute('data-client-all')) setClients([]); else toggleClient(b.dataset.client, false);

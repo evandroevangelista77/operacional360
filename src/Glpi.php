@@ -69,9 +69,15 @@ class Glpi
         return $ids;
     }
 
+    /** Entidades "pasta" do NOC 360 (client_root_markers, ex.: CLIENTES AXON): o cliente é a filha dela. */
+    private static function containers(): array
+    {
+        return array_map('mb_strtoupper', array_map('strval', (array) (Settings::noc360()['client_root_markers'] ?? [])));
+    }
+
     /**
-     * Nome do "cliente" de um chamado dentro da entidade do painel: a filha direta
-     * da entidade do painel que contém o chamado (ou o próprio nome da entidade do painel).
+     * Nome do "cliente" de um chamado dentro da entidade do painel: a filha direta da entidade do painel
+     * que contém o chamado; dentro de uma pasta (CLIENTES AXON), a filha da pasta.
      */
     public static function clientOf(string $fullName, string $root): string
     {
@@ -79,11 +85,31 @@ class Glpi
         if ($fullName === $root || !str_starts_with($fullName, $root . ' > ')) {
             return $rootShort;
         }
-        $rest = substr($fullName, strlen($root) + 3);
-        return explode(' > ', $rest)[0];
+        $parts = explode(' > ', substr($fullName, strlen($root) + 3));
+        if (isset($parts[1]) && in_array(mb_strtoupper($parts[0]), self::containers(), true)) {
+            return $parts[1];
+        }
+        return $parts[0];
     }
 
-    /** Entidades filhas diretas da entidade do painel (nomes), para o painel de clientes. */
+    /** Pasta do cliente (ex.: CLIENTES AXON) de cada cliente que está dentro de uma: cliente => pasta. */
+    public static function clientFolders(int $root): array
+    {
+        $name = self::entityName($root);
+        $out = [];
+        foreach (self::subtree($root) as $id) {
+            $full = self::entityName($id);
+            if (str_starts_with($full, $name . ' > ')) {
+                $parts = explode(' > ', substr($full, strlen($name) + 3));
+                if (isset($parts[1]) && in_array(mb_strtoupper($parts[0]), self::containers(), true)) {
+                    $out[$parts[1]] = $parts[0];
+                }
+            }
+        }
+        return $out;
+    }
+
+    /** Clientes do painel (nomes): as filhas diretas da raiz e, dentro de uma pasta, as filhas dela (a pasta só entra se tiver chamados próprios). */
     public static function directChildren(int $root): array
     {
         $name = self::entityName($root);
@@ -91,8 +117,12 @@ class Glpi
         foreach (self::subtree($root) as $id) {
             $full = self::entityName($id);
             if ($full !== $name && str_starts_with($full, $name . ' > ')) {
-                $first = explode(' > ', substr($full, strlen($name) + 3))[0];
-                $out[$first] = true;
+                $c = self::clientOf($full, $name);
+                $parts = explode(' > ', substr($full, strlen($name) + 3));
+                if (count($parts) === 1 && in_array(mb_strtoupper($parts[0]), self::containers(), true)) {
+                    continue; // a própria pasta: os clientes são as filhas dela
+                }
+                $out[$c] = true;
             }
         }
         $names = array_keys($out);

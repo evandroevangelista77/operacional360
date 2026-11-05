@@ -658,3 +658,13 @@ table.hr-t { width: 100%; border-collapse: collapse; font-size: 12.5px; font-var
 
 /* a barra de filtros (e o menu de seleção aberto) fica acima dos cartões, que também têm desfoque e vazavam por cima da lista */
 .filters { position: relative; z-index: 30; }
+
+/* pastas de clientes (ex.: CLIENTES AXON) no menu de clientes */
+.filters .cp-folder { display: flex; flex-direction: column; gap: 2px; }
+.filters .cp-head { font-weight: 600; }
+.filters .cp-caret { order: 2; width: 18px; height: 18px; flex: none; padding: 0; border: 0; background: transparent; cursor: pointer; position: relative; }
+.filters .cp-caret::after { content: ''; position: absolute; left: 5px; top: 5px; width: 6px; height: 6px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.filters .cp-folder.open .cp-caret::after { transform: rotate(45deg); top: 3px; }
+.filters .cp-head span { order: 3; }
+.filters .cp-head small { order: 4; }
+.filters .cp-sub { padding-left: 34px; }

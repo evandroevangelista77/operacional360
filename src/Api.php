@@ -251,6 +251,7 @@ class Api
                 'hosts_offline' => count(array_filter($hostCards, fn ($h) => $h['status'] === 'offline')),
             ],
             'clients'             => array_values($agg),
+            'folders'             => $scope['folders'],
             'hostgroups'          => array_map(fn ($g) => ['id' => $g['group_id'], 'name' => $g['group_name'], 'client' => $g['client']], $scope['all_groups']),
             'groups_in_use'       => array_column($scope['groups'], 'group_id'),
             'timeline'            => $days,
