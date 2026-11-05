@@ -13,7 +13,8 @@ if (!\GlpiPlugin\Operacional360\Settings::canView()) {
     Html::displayRightError();
 }
 
-Html::header('Operacional 360', $_SERVER['PHP_SELF'], Menu::SECTOR, 'operacional360');
+$isKpi = ($_GET['view'] ?? '') === 'kpi';
+Html::header($isKpi ? "KPI's" : 'Operacional 360', $_SERVER['PHP_SELF'], Menu::SECTOR, $isKpi ? 'operacional360_kpi' : 'operacional360');
 
 try {
     Scope::resolve();
@@ -25,7 +26,7 @@ try {
 }
 
 // filtros da URL (período, cliente(s), host, chamado) seguem para o quadro
-$keep = ['from', 'to', 'preset', 'client', 'group', 'hostid', 'ticket'];
+$keep = ['from', 'to', 'preset', 'client', 'group', 'hostid', 'ticket', 'view'];
 $query = array_intersect_key($_GET, array_flip($keep));
 $src = htmlspecialchars(
     $CFG_GLPI['root_doc'] . '/plugins/operacional360/front/op360.php' . ($query ? '?' . http_build_query($query) : '?p=/'),

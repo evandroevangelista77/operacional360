@@ -190,7 +190,6 @@
       if (cur && cur.dataset.preset === '7' && !window.__kpiMonthSet) { window.__kpiMonthSet = true; const m = $('.presets button[data-preset="month"]'); if (m) m.click(); }
       render(last);
     }
-    try { sessionStorage.setItem('op360.view', v); } catch (err) { /* sem armazenamento */ }
   }
   $$('#viewTabs button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   document.addEventListener('op360:data', (ev) => { last = ev.detail; if (document.body.classList.contains('view-kpi')) render(last); });
@@ -199,5 +198,5 @@
     const t = document.title; document.title = `Operacional 360 - KPIs - ${(last.filters.from || '')} a ${(last.filters.to || '')}`;
     window.print(); setTimeout(() => { document.title = t; }, 1500);
   });
-  try { if (sessionStorage.getItem('op360.view') === 'kpi') setView('kpi'); } catch (err) { /* ok */ }
+  if (new URLSearchParams(location.search).get('view') === 'kpi') setView('kpi');
 })();

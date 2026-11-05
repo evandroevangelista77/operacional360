@@ -14,6 +14,7 @@ class Menu
     public const SECTOR = 'operacional360';
 
     public const PAGE = '/plugins/operacional360/front/painel.php';
+    public const KPI_PAGE = '/plugins/operacional360/front/painel.php?view=kpi';
 
     public static function getMenuContent(): array|false
     {
@@ -27,6 +28,11 @@ class Menu
                 'title' => 'Operacional 360',
                 'page'  => self::PAGE,
                 'icon'  => self::getIcon(),
+            ],
+            'operacional360_kpi' => [
+                'title' => "KPI's",
+                'page'  => self::KPI_PAGE,
+                'icon'  => 'ti ti-chart-infographic',
             ],
         ];
         return $content;

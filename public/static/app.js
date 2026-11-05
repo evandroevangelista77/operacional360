@@ -99,6 +99,7 @@
     if (state.ticket) q.set('ticket', state.ticket);
     if (state.clients.length) q.set('client', state.clients.join('|'));
     if (state.groups.length) q.set('group', state.groups.join('|'));
+    if (document.body.classList.contains('view-kpi')) q.set('view', 'kpi');
     history.replaceState(null, '', `${location.pathname}?${q}`);
   }
   function syncForm() {
