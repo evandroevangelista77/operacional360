@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Operacional 360: página do GLPI com o painel por entidade (o layout do NOC 360 é
+ * Operacional 360: página do GLPI com o painel por cliente (o layout do NOC 360 é
  * servido por front/op360.php dentro de um quadro, com o mesmo login e os mesmos direitos).
  */
 
@@ -15,16 +15,17 @@ if (!\GlpiPlugin\Operacional360\Settings::canView()) {
 
 Html::header('Operacional 360', $_SERVER['PHP_SELF'], Menu::SECTOR, 'operacional360');
 
-if (!Scope::accessible()) {
-    echo '<div class="alert alert-warning m-2" role="alert"><i class="ti ti-alert-triangle me-1"></i>'
-        . 'Nenhuma entidade com host group configurado está liberada para o seu perfil. '
-        . 'Peça ao administrador para configurar em <b>Operacional 360 → Configurar</b>.</div>';
+try {
+    Scope::resolve();
+} catch (Throwable $ex) {
+    echo '<div class="alert alert-danger m-2" role="alert"><i class="ti ti-alert-circle me-1"></i>'
+        . htmlspecialchars($ex->getMessage(), ENT_QUOTES) . '</div>';
     Html::footer();
     return;
 }
 
-// filtros da URL (entidade, período, cliente, host, chamado) seguem para o quadro
-$keep = ['entity', 'from', 'to', 'preset', 'client', 'hostid', 'ticket'];
+// filtros da URL (período, cliente(s), host, chamado) seguem para o quadro
+$keep = ['from', 'to', 'preset', 'client', 'group', 'hostid', 'ticket'];
 $query = array_intersect_key($_GET, array_flip($keep));
 $src = htmlspecialchars(
     $CFG_GLPI['root_doc'] . '/plugins/operacional360/front/op360.php' . ($query ? '?' . http_build_query($query) : '?p=/'),
@@ -38,7 +39,7 @@ echo <<<HTML
     <div class="d-flex align-items-center justify-content-between mb-2">
         <div class="text-secondary small">
             <i class="ti ti-chart-dots-3 me-1"></i>
-            Painel operacional da entidade: chamados do GLPI e alertas do Zabbix dos host groups
+            Painel operacional por cliente: chamados do GLPI e alertas do Zabbix dos host groups
         </div>
         <div class="d-flex gap-2">
             $config

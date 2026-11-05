@@ -1,11 +1,10 @@
 <?php
 
 use GlpiPlugin\Operacional360\Menu;
-use GlpiPlugin\Operacional360\Settings;
 
 /**
- * Instalação: cria o direito de ver o painel (todo perfil da interface central) e a
- * configuração padrão. Não cria tabelas: o mapa fica na configuração do plugin.
+ * Instalação: cria o direito de ver o painel (todo perfil da interface central).
+ * Não cria tabelas nem guarda configuração: os acessos vêm do NOC 360.
  */
 function plugin_operacional360_install(): bool
 {
@@ -25,7 +24,6 @@ function plugin_operacional360_install(): bool
         }
     }
 
-    Settings::installDefaults();
     unset($_SESSION['glpimenu']);
 
     return true;
@@ -34,7 +32,8 @@ function plugin_operacional360_install(): bool
 function plugin_operacional360_uninstall(): bool
 {
     ProfileRight::deleteProfileRights([Menu::$rightname]);
-    Config::deleteConfigurationValues(Settings::CONTEXT, array_keys(Settings::DEFAULTS));
+    // configuração antiga (versões até 1.x guardavam tokens e mapa no banco): remove
+    Config::deleteConfigurationValues('plugin:operacional360');
     unset($_SESSION['glpimenu']);
 
     return true;

@@ -12,7 +12,8 @@ use RuntimeException;
  *   action=hostlog   → histórico de alertas de um host (dentro do escopo)
  *   action=ticketlog → histórico de um chamado (dentro do escopo)
  *
- * Tudo é limitado à entidade escolhida e aos host groups ligados a ela no mapa.
+ * Tudo é limitado à entidade raiz do painel; os parâmetros client="A|B" (clientes) e group="12|34"
+ * (host groups do Zabbix) escolhem o que entra.
  */
 class Api
 {
@@ -36,15 +37,13 @@ class Api
         $till = strtotime("$toDate 23:59:59");
         $hostid = isset($q['hostid']) && ctype_digit((string) $q['hostid']) ? (string) $q['hostid'] : null;
         $ticketQ = trim((string) ($q['ticket'] ?? ''));
-        $clientSel = trim((string) ($q['client'] ?? ''));
         $now = time();
         $ttl = Settings::int('cache_seconds', 0, 600);
         $sevs = Settings::severities();
         $front = Settings::zabbixFront();
 
-        $scope = Scope::resolve(self::entityParam($q));
+        $scope = Scope::resolve($q);
         $root = $scope['name'];
-        $entityIds = Glpi::subtree($scope['id']);
         $groupIds = array_values(array_unique(array_column($scope['groups'], 'group_id')));
         $sevAll = $scope['severities'];
 
@@ -63,9 +62,9 @@ class Api
         $raw['problems'] = array_values(array_filter($raw['problems'], fn ($p) => self::allowed($hostSev, $p['hostid'], $p['severity'])));
         $raw['events'] = array_values(array_filter($raw['events'], fn ($e) => self::allowed($hostSev, $e['hostid'], $e['severity'])));
 
-        // ---------------- GLPI: chamados da entidade e das filhas
-        $periodAll = array_map(fn ($t) => self::ticketRow($t, $now, $root), Glpi::tickets($entityIds, $from, $till, false));
-        $openAll = array_map(fn ($t) => self::ticketRow($t, $now, $root), Glpi::tickets($entityIds, 0, 0, true));
+        // ---------------- GLPI: chamados da entidade raiz e das filhas (cada filha direta é um cliente)
+        $periodAll = array_map(fn ($t) => self::ticketRow($t, $now, $root), Glpi::tickets($scope, $from, $till, false));
+        $openAll = array_map(fn ($t) => self::ticketRow($t, $now, $root), Glpi::tickets($scope, 0, 0, true));
 
         // ---------------- totais por cliente (sem os filtros de cliente/host/chamado)
         $agg = [];
@@ -73,13 +72,8 @@ class Api
             $agg[$n] ??= ['name' => $n, 'kind' => $kind, 'tickets' => 0, 'open' => 0, 'pending' => 0, 'overdue' => 0, 'alerts' => 0,
                 'sev' => array_fill_keys($sevs, 0), 'active' => 0, 'unacked' => 0, 'hosts' => 0, 'groups' => []];
         };
-        $touch($scope['short'], 'glpi');
-        foreach (Glpi::directChildren($scope['id']) as $child) {
+        foreach ($scope['clients'] as $child) {
             $touch($child, 'glpi');
-        }
-        foreach ($scope['groups'] as $g) {
-            $gname = $idx['groupnames'][$g['group_id']] ?? ($g['group_name'] !== '' ? $g['group_name'] : $g['group_id']);
-            $touch($gname, 'zabbix');
         }
         foreach ($periodAll as $t) {
             $touch($t['client'], 'glpi');
@@ -93,31 +87,25 @@ class Api
         }
         foreach ($zHosts as $h) {
             $c = $hostClient[$h['hostid']];
-            $touch($c, 'zabbix');
+            $touch($c, 'glpi');
             $agg[$c]['hosts']++;
         }
         foreach ($raw['events'] as $e) {
             $c = $hostClient[$e['hostid']];
-            $touch($c, 'zabbix');
+            $touch($c, 'glpi');
             $agg[$c]['alerts']++;
             $agg[$c]['sev'][$e['severity']] = ($agg[$c]['sev'][$e['severity']] ?? 0) + 1;
         }
         foreach ($raw['problems'] as $p) {
             $c = $hostClient[$p['hostid']];
-            $touch($c, 'zabbix');
+            $touch($c, 'glpi');
             $agg[$c]['active']++;
             $agg[$c]['unacked'] += $p['acknowledged'] ? 0 : 1;
         }
-        foreach ($agg as $n => &$a) {
-            $a['groups'] = $a['kind'] === 'zabbix' ? [$n] : [];
-        }
-        unset($a);
         uasort($agg, fn ($a, $b) => ($b['tickets'] + $b['alerts']) <=> ($a['tickets'] + $a['alerts']) ?: strcasecmp($a['name'], $b['name']));
 
-        // ---------------- filtros: cliente (entidade ou host group), host e chamado
-        $clientKind = $clientSel !== '' && isset($agg[$clientSel]) ? $agg[$clientSel]['kind'] : null;
-        $hostFilter = $clientKind === 'zabbix' ? $clientSel : '';
-        $ticketFilter = $clientKind === 'glpi' ? $clientSel : '';
+        // ---------------- filtros: cliente(s), host e chamado (o mesmo cliente filtra chamados e hosts)
+        $clientsSel = Scope::parseClients((string) ($q['client'] ?? ''), array_map('strval', array_keys($agg)));
 
         $hostName = null;
         foreach ($zHosts as $h) {
@@ -125,12 +113,12 @@ class Api
                 $hostName = $h['name'];
             }
         }
-        $inScope = function ($hid) use ($hostid, $hostFilter, $hostClient): bool {
+        $inScope = function ($hid) use ($hostid, $clientsSel, $hostClient): bool {
             $hid = (string) $hid;
-            return (!$hostid || $hid === $hostid) && ($hostFilter === '' || ($hostClient[$hid] ?? null) === $hostFilter);
+            return (!$hostid || $hid === $hostid) && (!$clientsSel || in_array($hostClient[$hid] ?? null, $clientsSel, true));
         };
-        $matchT = function (array $t) use ($ticketFilter, $hostName, $ticketQ): bool {
-            if ($ticketFilter !== '' && $t['client'] !== $ticketFilter) {
+        $matchT = function (array $t) use ($clientsSel, $hostName, $ticketQ): bool {
+            if ($clientsSel && !in_array($t['client'], $clientsSel, true)) {
                 return false;
             }
             if ($hostName !== null && stripos($t['name'], '] ' . $hostName . ':') === false) {
@@ -250,8 +238,7 @@ class Api
             'generated_at' => time(),
             'entity'       => $scope['id'],
             'entity_name'  => $root,
-            'entities'     => $scope['entities'],
-            'filters'      => ['from' => $fromDate, 'to' => $toDate, 'hostid' => $hostid, 'host' => $hostName, 'ticket' => $ticketQ, 'client' => $clientSel],
+            'filters'      => ['from' => $fromDate, 'to' => $toDate, 'hostid' => $hostid, 'host' => $hostName, 'ticket' => $ticketQ, 'clients' => $clientsSel, 'groups' => $scope['picked']],
             'severities'   => $sevs,
             'kpi'          => [
                 'alerts' => count($events), 'alerts_by_sev' => $sevCount,
@@ -264,6 +251,8 @@ class Api
                 'hosts_offline' => count(array_filter($hostCards, fn ($h) => $h['status'] === 'offline')),
             ],
             'clients'             => array_values($agg),
+            'hostgroups'          => array_map(fn ($g) => ['id' => $g['group_id'], 'name' => $g['group_name'], 'client' => $g['client']], $scope['all_groups']),
+            'groups_in_use'       => array_column($scope['groups'], 'group_id'),
             'timeline'            => $days,
             'top_hosts'           => $topHosts,
             'tickets_by_status'   => $byStatus,
@@ -282,7 +271,7 @@ class Api
     {
         $now = time();
         $ttl = Settings::int('cache_seconds', 0, 600);
-        $scope = Scope::resolve(self::entityParam($q));
+        $scope = Scope::resolve($q);
         $groupIds = array_values(array_unique(array_column($scope['groups'], 'group_id')));
         $idx = $groupIds ? self::hostIndex($scope, $ttl) : ['hosts' => [], 'client' => [], 'sev' => [], 'names' => [], 'groupnames' => []];
 
@@ -301,11 +290,19 @@ class Api
                 'host' => $hosts[$p['eventid']]['name'] ?? '—', 'hostid' => $hosts[$p['eventid']]['hostid'] ?? null], $w1['p']);
         });
         $zbx = array_values(array_filter($zbx, fn ($p) => self::allowed($idx['sev'], $p['hostid'], $p['severity'])));
+        // só os clientes escolhidos na tela (sem escolha, todos)
+        $clientsSel = Scope::parseClients((string) ($q['client'] ?? ''), array_merge($scope['clients'], array_values(array_unique($idx['client']))));
+        if ($clientsSel) {
+            $zbx = array_values(array_filter($zbx, fn ($p) => in_array($idx['client'][$p['hostid']] ?? null, $clientsSel, true)));
+        }
 
         $root = $scope['name'];
         $tickets = [];
-        foreach (Glpi::tickets(Glpi::subtree($scope['id']), 0, 0, true) as $t) {
+        foreach (Glpi::tickets($scope, 0, 0, true) as $t) {
             $r = self::ticketRow($t, $now, $root);
+            if ($clientsSel && !in_array($r['client'], $clientsSel, true)) {
+                continue;
+            }
             $tickets[] = ['id' => $r['id'], 'name' => $r['name'], 'date' => $r['date'], 'client' => $r['client'], 'status' => $r['status'], 'status_id' => $r['status_id'],
                 'due' => $t['time_to_resolve'] ? strtotime($t['time_to_resolve']) : null, 'pending' => $r['pending']];
         }
@@ -333,7 +330,7 @@ class Api
         if ($hid === '') {
             throw new HttpError(400, 'hostid obrigatório');
         }
-        $scope = Scope::resolve(self::entityParam($q));
+        $scope = Scope::resolve($q);
         $idx = self::hostIndex($scope, Settings::int('cache_seconds', 0, 600));
         if (!isset($idx['client'][$hid])) {
             throw new HttpError(404, 'Host fora do escopo do painel');
@@ -363,8 +360,8 @@ class Api
         if ($id <= 0) {
             throw new HttpError(400, 'id obrigatório');
         }
-        $scope = Scope::resolve(self::entityParam($q));
-        if (Glpi::ticketIn($id, Glpi::subtree($scope['id'])) === null) {
+        $scope = Scope::resolve($q);
+        if (Glpi::ticketIn($id, $scope) === null) {
             throw new HttpError(404, 'Chamado fora do escopo do painel');
         }
         $items = Glpi::history($id);
@@ -384,7 +381,7 @@ class Api
     private static function hostIndex(array $scope, int $ttl): array
     {
         $groupIds = array_values(array_unique(array_column($scope['groups'], 'group_id')));
-        return self::cached('hosts:' . $scope['id'] . ':' . md5(json_encode($scope['groups'])), $ttl, function () use ($scope, $groupIds) {
+        return self::cached('hosts:' . $scope['id'] . ':' . md5(json_encode([$scope['name'], $scope['groups']])), $ttl, function () use ($scope, $groupIds) {
             $hosts = Zabbix::batchStrict(['h' => ['host.get', ['output' => ['hostid', 'host', 'name', 'active_available'], 'groupids' => $groupIds,
                 'filter' => ['status' => 0], 'selectInterfaces' => ['type', 'available'], 'selectHostGroups' => ['groupid', 'name'], 'sortfield' => 'name']]])['h'];
             $names = [];
@@ -402,7 +399,7 @@ class Api
                 $allowed = [];
                 foreach ($scope['groups'] as $g) {
                     if (in_array($g['group_id'], $mine, true)) {
-                        $c ??= $names[$g['group_id']] ?? ($g['group_name'] !== '' ? $g['group_name'] : $g['group_id']);
+                        $c ??= Scope::clientOfGroup($scope, $g);
                         array_push($allowed, ...$g['severities']);
                     }
                 }
@@ -574,33 +571,15 @@ class Api
         return [(string) $from, (string) $to];
     }
 
-    private static function entityParam(array $q): ?int
-    {
-        $e = $q['entity'] ?? null;
-        return ($e !== null && ctype_digit((string) $e)) ? (int) $e : null;
-    }
-
     private static function avg(array $values): ?float
     {
         return $values ? array_sum($values) / count($values) : null;
     }
 
-    /** Guarda em arquivo temporário o resultado de $fn por $ttl segundos (0 = sem cache). */
+    /** Guarda o resultado de $fn por $ttl segundos (0 = sem cache). */
     private static function cached(string $key, int $ttl, callable $fn): mixed
     {
-        $file = sys_get_temp_dir() . '/op360_' . md5($key);
-        if ($ttl > 0 && is_file($file) && time() - (int) filemtime($file) < $ttl) {
-            $raw = (string) file_get_contents($file);
-            $value = json_decode($raw, true);
-            if ($value !== null) {
-                return $value;
-            }
-        }
-        $value = $fn();
-        if ($ttl > 0) {
-            @file_put_contents($file, json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
-        }
-        return $value;
+        return Cache::remember($key, $ttl, $fn);
     }
 
     /** HTML do GLPI para texto simples (histórico do chamado). */

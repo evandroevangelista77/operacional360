@@ -2,28 +2,32 @@
 
 namespace GlpiPlugin\Operacional360;
 
-use Config;
-use GLPIKey;
 use Session;
 
 /**
- * Configuração do plugin (Configurar → Plugins → Operacional 360), só para quem
- * tem o direito de configuração do GLPI (administrador).
- *
- * O "mapa" liga cada entidade do GLPI a um ou mais host groups do Zabbix, e para
- * cada host group diz quais severidades aparecem no painel da entidade.
+ * Configuração do plugin: não há tela de configuração. Os acessos (Zabbix e GLPI da OAK) são os
+ * MESMOS do NOC 360: o plugin lê /etc/datacenter360/config.php (e o que o NOC 360 salvou em
+ * /var/lib/datacenter360/config.json). Os clientes e os host groups são escolhidos no próprio painel.
  */
 class Settings
 {
     public const CONTEXT = 'plugin:operacional360';
 
     /** Valores padrão (texto, como o Config do GLPI guarda). */
+    public const DEFAULT_ZABBIX_URL = 'https://noc-lnx-zab-01.eastus.cloudapp.azure.com/zabbix-oakmont/api_jsonrpc.php';
+    public const DEFAULT_GLPI_API = 'https://itsm.oakmontgroup.com.br/apirest.php';
+    public const DEFAULT_ROOT = 'OAKMONT > TI > NOC';
+
     public const DEFAULTS = [
-        'zabbix_url'       => '',
+        'zabbix_url'       => self::DEFAULT_ZABBIX_URL,
         'zabbix_token'     => '',
         'zabbix_verify'    => '1',
         'zabbix_front'     => '',
-        'entity_root'      => 'Root > NOC',
+        'glpi_api_url'     => self::DEFAULT_GLPI_API,
+        'glpi_app_token'   => '',
+        'glpi_user_token'  => '',
+        'glpi_verify'      => '1',
+        'entity_root'      => self::DEFAULT_ROOT,
         'viewers'          => '',
         'glpi_front'       => '',
         'severities'       => '5,4,2',
@@ -31,8 +35,6 @@ class Settings
         'list_max'         => '400',
         'glpi_max_tickets' => '8000',
         'cache_seconds'    => '20',
-        'mapping'          => '[]',
-        'alerts'           => '{}',
     ];
 
     /** Rótulos das severidades do Zabbix. */
@@ -54,17 +56,63 @@ class Settings
         'glpi_slalate' => ['SLA vencido', 'GLPI', 'ti-hourglass-empty', '#ef4444', ['flag', 'sound', 'popup', 'voice', 'sticky'], 'sirene'],
     ];
 
-    /** Lê tudo, com o token do Zabbix descriptografado (o GLPI grava "secured configs" cifrados). */
+    /** Arquivos do NOC 360 (acessos compartilhados); o 2º só existe depois que alguém salva ajustes na tela do NOC 360. */
+    public const NOC360_CONFIG = '/etc/datacenter360/config.php';
+    public const NOC360_OVERRIDES = '/var/lib/datacenter360/config.json';
+
     private static ?array $cache = null;
+    private static ?array $noc = null;
+
+    /** Configuração do NOC 360 (config.php + ajustes salvos), ou [] se este servidor não tem o NOC 360. */
+    public static function noc360(): array
+    {
+        if (self::$noc === null) {
+            $cfg = [];
+            if (is_readable(self::NOC360_CONFIG)) {
+                $r = @include self::NOC360_CONFIG;
+                $cfg = is_array($r) ? $r : [];
+            }
+            if (is_readable(self::NOC360_OVERRIDES)) {
+                $j = json_decode((string) @file_get_contents(self::NOC360_OVERRIDES), true);
+                foreach (is_array($j) ? $j : [] as $k => $v) {
+                    if ($v !== null && $v !== '') {
+                        $cfg[$k] = $v;
+                    }
+                }
+            }
+            self::$noc = $cfg;
+        }
+        return self::$noc;
+    }
 
     public static function all(): array
     {
         if (self::$cache === null) {
-            $values = array_merge(self::DEFAULTS, array_map('strval', Config::getConfigurationValues(self::CONTEXT, array_keys(self::DEFAULTS))));
-            if ($values['zabbix_token'] !== '') {
-                $values['zabbix_token'] = (string) (new GLPIKey())->decrypt($values['zabbix_token']);
+            $n = self::noc360();
+            $rest = is_array($n['glpi_rest'] ?? null) ? $n['glpi_rest'] : [];
+            $v = self::DEFAULTS;
+            $map = [
+                'zabbix_url'      => $n['zabbix_url'] ?? null,
+                'zabbix_token'    => $n['zabbix_token'] ?? null,
+                'zabbix_front'    => $n['zabbix_front'] ?? null,
+                'zabbix_verify'   => isset($n['zabbix_verify']) ? ($n['zabbix_verify'] ? '1' : '0') : null,
+                'glpi_api_url'    => $rest['url'] ?? null,
+                'glpi_app_token'  => $rest['app_token'] ?? null,
+                'glpi_user_token' => $rest['user_token'] ?? null,
+                'glpi_front'      => $n['glpi_front'] ?? null,
+                'entity_root'     => $n['glpi_entity_prefix'] ?? null,
+                'severities'      => isset($n['severities']) ? implode(',', (array) $n['severities']) : null,
+                'sla_hours'       => isset($n['sla_hours']) ? implode(',', array_map(fn ($p, $h) => "$p:$h", array_keys((array) $n['sla_hours']), (array) $n['sla_hours'])) : null,
+                'list_max'        => $n['list_max'] ?? null,
+                'glpi_max_tickets' => $n['glpi_max_tickets'] ?? null,
+                'cache_seconds'   => isset($n['cache_ttl']) ? min(600, (int) $n['cache_ttl']) : null,
+            ];
+            foreach ($map as $k => $val) {
+                if ($val !== null && $val !== '') {
+                    $v[$k] = (string) $val;
+                }
             }
-            self::$cache = $values;
+            self::$cache = $v;
         }
         return self::$cache;
     }
@@ -138,7 +186,7 @@ class Settings
     /** Entidade raiz do painel: só ela e as abaixo dela (NOC para baixo) podem entrar no mapa. */
     public static function entityRoot(): string
     {
-        return trim(self::get('entity_root'));
+        return Glpi::norm(self::get('entity_root'));
     }
 
     /** A entidade está na raiz configurada (ela mesma ou uma filha). */
@@ -158,19 +206,24 @@ class Settings
         return rtrim((string) $front, '/');
     }
 
-    /** Endereço do GLPI para os links de chamado (padrão: o endereço do próprio GLPI). */
+    /** Endereço do GLPI para os links de chamado (padrão: o GLPI da API configurada, ou o do próprio GLPI). */
     public static function glpiFront(): string
     {
         global $CFG_GLPI;
-        $front = self::get('glpi_front') ?: ($CFG_GLPI['url_base'] ?? $CFG_GLPI['root_doc'] ?? '');
+        $front = self::get('glpi_front');
+        if ($front === '' && GlpiRest::enabled()) {
+            $front = preg_replace('#/apirest\.php/?$#', '', self::get('glpi_api_url'));
+        }
+        if ($front === '' || $front === null) {
+            $front = $CFG_GLPI['url_base'] ?? $CFG_GLPI['root_doc'] ?? '';
+        }
         return rtrim((string) $front, '/');
     }
 
     /** Alertas do navegador (canais, som, voz e pop-up), com o que foi salvo sobre o padrão. */
     public static function alerts(): array
     {
-        $saved = json_decode(self::get('alerts') ?: '{}', true);
-        $saved = is_array($saved) ? $saved : [];
+        $saved = [];
         $tipos = [];
         foreach (self::ALERT_TYPES as $key => [, , , , $canais, $tom]) {
             $o = $saved['tipos'][$key] ?? [];
@@ -190,59 +243,5 @@ class Settings
             'sla_warn_minutes' => (int) ($saved['sla_warn_minutes'] ?? 60),
             'quiet'           => $saved['quiet'] ?? null,
         ];
-    }
-
-    /**
-     * Mapa entidade → host group, normalizado: [entity_id, group_id, group_name, severities[]].
-     * A ordem é a da configuração (o primeiro host group que casar dá o "cliente" do host).
-     */
-    public static function mapping(): array
-    {
-        $rows = json_decode(self::get('mapping') ?: '[]', true);
-        $out = [];
-        foreach (is_array($rows) ? $rows : [] as $r) {
-            $eid = (int) ($r['entity_id'] ?? 0);
-            $gid = trim((string) ($r['group_id'] ?? ''));
-            if ($eid <= 0 || !ctype_digit($gid)) {
-                continue;
-            }
-            $sev = array_values(array_intersect(array_map('intval', (array) ($r['severities'] ?? [])), array_keys(self::SEVERITY_LABELS)));
-            rsort($sev);
-            $out[] = [
-                'entity_id'  => $eid,
-                'group_id'   => $gid,
-                'group_name' => mb_substr(trim((string) ($r['group_name'] ?? '')), 0, 255),
-                'severities' => $sev ?: [5, 4, 2],
-            ];
-        }
-        return $out;
-    }
-
-    /** Grava a configuração (campos em branco do token mantêm o token atual). */
-    public static function save(array $values): void
-    {
-        $clean = array_intersect_key($values, self::DEFAULTS);
-        if (array_key_exists('zabbix_token', $clean) && trim((string) $clean['zabbix_token']) === '') {
-            unset($clean['zabbix_token']);
-        }
-        Config::setConfigurationValues(self::CONTEXT, array_map('strval', $clean));
-        self::forget();
-    }
-
-    /** Na instalação: grava só o que ainda não existe (atualizar o plugin mantém a configuração). */
-    public static function installDefaults(): void
-    {
-        $current = Config::getConfigurationValues(self::CONTEXT);
-        $missing = array_diff_key(self::DEFAULTS, $current);
-        if ($missing) {
-            Config::setConfigurationValues(self::CONTEXT, $missing);
-        }
-        self::forget();
-    }
-
-    /** Limpa o cache da requisição (depois de gravar). */
-    private static function forget(): void
-    {
-        self::$cache = null;
     }
 }

@@ -612,3 +612,46 @@ table.hr-t { width: 100%; border-collapse: collapse; font-size: 12.5px; font-var
 .ktile b[data-len="5"] { font-size: clamp(30px, 2.55vw, 44px); }
 .ktile b[data-len="6"] { font-size: clamp(26px, 2.15vw, 38px); }
 .ktile b[data-len="7"], .ktile b[data-len="8"] { font-size: clamp(22px, 1.8vw, 32px); }
+
+/* ---------- seletor de clientes (vários) e barra dos clientes escolhidos */
+.clientpick { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.cp-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.cp-btn { min-height: 34px; min-width: 220px; max-width: 320px; padding: 7px 30px 7px 10px; text-align: left; border-radius: 8px; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--ring); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.cp-btn::after { content: ''; position: absolute; right: 11px; top: 50%; width: 6px; height: 6px; margin-top: -5px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
+.cp-btn[aria-expanded="true"]::after { transform: rotate(-135deg); margin-top: -2px; }
+.cp-btn.has { border-color: var(--accent); }
+.cp-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 320px; max-width: 92vw; padding: 10px; border-radius: 10px;
+  background: #0d2347; border: 1px solid var(--ring); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); display: flex; flex-direction: column; gap: 8px; }
+.cp-pop[hidden] { display: none; }
+.cp-pop input[type="search"] { width: 100%; }
+.cp-list { max-height: 280px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.cp-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text); }
+.cp-item:hover { background: rgba(255, 255, 255, 0.06); }
+.cp-item input { width: 16px; height: 16px; min-height: 0; accent-color: var(--accent); flex: none; }
+.cp-item span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-item small { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.cp-empty { padding: 10px 8px; color: var(--muted); font-size: 12px; }
+.cp-actions { display: flex; justify-content: space-between; gap: 8px; }
+.cp-actions button { min-height: 32px; padding: 5px 12px; border-radius: 8px; cursor: pointer; border: 1px solid var(--ring); background: transparent; }
+.cp-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 24px; border-bottom: 1px solid var(--ring); background: rgba(8, 126, 131, 0.1); }
+.selbar[hidden] { display: none; }
+.selbar .sel-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-right: 2px; }
+.selbar .chip { margin: 0; border-color: var(--accent); background: rgba(8, 126, 131, 0.18); color: var(--text); cursor: pointer; }
+.selbar .chip:hover { background: rgba(8, 126, 131, 0.32); }
+.selbar .chip em { font-style: normal; opacity: 0.7; font-size: 14px; line-height: 1; }
+.selbar .chip.clear { background: transparent; border-color: var(--grid); color: var(--text-2); }
+
+/* seletores de cliente e host group: o "label" genérico dos filtros (coluna, maiúsculas) não vale para os itens da lista */
+.filters .cp-pop { display: flex; flex-direction: column; gap: 8px; width: 340px; }
+.filters .cp-pop[hidden] { display: none; }
+.filters .cp-list { display: flex; flex-direction: column; align-items: stretch; }
+.filters .cp-item { flex-direction: row; align-items: center; justify-content: flex-start; gap: 8px; text-transform: none; letter-spacing: 0;
+  font-size: 13px; text-align: left; padding: 7px 8px; }
+.filters .cp-item input[type="checkbox"] { width: 16px; height: 16px; flex: none; margin: 0; padding: 0; appearance: auto; }
+.filters .cp-item span { flex: 1; text-align: left; }
+.filters .cp-item small { margin-left: auto; font-size: 11px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.filters .cp-actions { flex-direction: row; justify-content: space-between; }
+@media (max-width: 700px) { .filters .cp-pop { width: min(340px, calc(100vw - 32px)); } .filters .clientpick { width: 100%; } .filters .cp-btn { max-width: none; width: 100%; } }

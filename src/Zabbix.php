@@ -25,7 +25,7 @@ class Zabbix
     private static function requireConfigured(): void
     {
         if (!Settings::isConfigured()) {
-            throw new HttpError(503, 'Conexão com o Zabbix não configurada (Configurar → Plugins → Operacional 360).');
+            throw new HttpError(503, 'Conexão com o Zabbix não encontrada: o Operacional 360 usa os acessos do NOC 360 (/etc/datacenter360/config.php).');
         }
     }
 

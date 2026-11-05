@@ -24,11 +24,28 @@ class Glpi
         if (self::$entities === null) {
             global $DB;
             self::$entities = [];
-            foreach ($DB->request(['SELECT' => ['id', 'completename'], 'FROM' => 'glpi_entities']) as $r) {
-                self::$entities[(int) $r['id']] = (string) $r['completename'];
+            if (GlpiRest::enabled()) {
+                self::$entities = GlpiRest::entities();
+            } else {
+                foreach ($DB->request(['SELECT' => ['id', 'completename'], 'FROM' => 'glpi_entities']) as $r) {
+                    self::$entities[(int) $r['id']] = self::norm((string) $r['completename']);
+                }
             }
         }
         return self::$entities;
+    }
+
+    /** Nome completo sem o prefixo da entidade raiz do GLPI ("Entidade raiz > " / "Root entity > "). */
+    public static function norm(string $name): string
+    {
+        $name = trim($name);
+        return trim((string) preg_replace('/^(Entidade raiz|Root entity)(\s*>\s*|$)/i', '', $name));
+    }
+
+    /** Os dados vêm de um GLPI remoto (API REST) e não do banco deste GLPI? */
+    public static function remote(): bool
+    {
+        return GlpiRest::enabled();
     }
 
     public static function entityName(int $id): string
@@ -137,9 +154,13 @@ class Glpi
      * Chamados das entidades dadas. Com $open, os não solucionados/fechados (sem
      * período); senão, os abertos no período. Já vêm com cliente, grupo e técnico.
      */
-    public static function tickets(array $entityIds, int $from, int $till, bool $open): array
+    public static function tickets(array $scope, int $from, int $till, bool $open): array
     {
         global $DB;
+        if (self::remote()) {
+            return GlpiRest::tickets((int) $scope['id'], $from, $till, $open, max(1, (int) Settings::get('glpi_max_tickets')));
+        }
+        $entityIds = $scope['entity_ids'];
         if (!$entityIds) {
             return [];
         }
@@ -160,10 +181,14 @@ class Glpi
         return self::enrich($rows);
     }
 
-    /** Um chamado pelo número, só se estiver nas entidades dadas. */
-    public static function ticketIn(int $id, array $entityIds): ?array
+    /** Um chamado pelo número, só se estiver no escopo do painel. */
+    public static function ticketIn(int $id, array $scope): ?array
     {
         global $DB;
+        if (self::remote()) {
+            return GlpiRest::ticketIn($id, (int) $scope['id']);
+        }
+        $entityIds = $scope['entity_ids'];
         if (!$entityIds) {
             return null;
         }
@@ -235,6 +260,9 @@ class Glpi
     public static function ticketContent(int $id): string
     {
         global $DB;
+        if (self::remote()) {
+            return GlpiRest::ticketContent($id);
+        }
         foreach ($DB->request(['SELECT' => ['content'], 'FROM' => 'glpi_tickets', 'WHERE' => ['id' => $id]]) as $r) {
             return (string) $r['content'];
         }
@@ -248,6 +276,9 @@ class Glpi
     public static function history(int $id): array
     {
         global $DB;
+        if (self::remote()) {
+            return GlpiRest::history($id);
+        }
         $out = [];
         foreach ($DB->request(['SELECT' => ['date', 'content', 'users_id_recipient'], 'FROM' => 'glpi_tickets', 'WHERE' => ['id' => $id]]) as $t) {
             $names = self::userNames([(int) $t['users_id_recipient']]);

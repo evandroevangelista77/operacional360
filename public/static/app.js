@@ -64,7 +64,7 @@
   const loadColor = (p) => ({ critical: C.critical, warning: C.warning, good: C.good, unknown: C.muted }[load3(p)]);
 
   /* ---------------- estado: filtros do servidor (URL) + filtros locais (clique) */
-  const state = { from: '', to: '', hostid: '', ticket: '', client: '', entity: '', preset: '7' };
+  const state = { from: '', to: '', hostid: '', ticket: '', clients: [], groups: [], preset: '7' };
   const local = { sev: null, noack: false, ticketView: 'all' };
   let data = null, office = null, si = null, timer = null, nextAt = 0, clientsLoaded = false;
 
@@ -81,26 +81,64 @@
     if (q.get('from') && q.get('to')) { state.from = q.get('from'); state.to = q.get('to'); state.preset = q.get('preset') || ''; }
     state.hostid = q.get('hostid') || '';
     state.ticket = q.get('ticket') || '';
-    state.client = q.get('client') || '';
-    state.entity = q.get('entity') || '';
+    // clientes: a URL manda; sem ela, vale a escolha que este usuário fez da última vez (guardada no navegador)
+    state.clients = q.has('client') ? parseClients(q.get('client')) : loadClients();
+    state.groups = q.has('group') ? parseClients(q.get('group')) : loadGroups();
   }
+  const parseClients = (raw) => [...new Set(String(raw || '').split('|').map((x) => x.trim()).filter(Boolean))];
+  const CLIENTS_KEY = 'op360.clientes.v1';
+  function loadClients() { try { return parseClients(JSON.parse(localStorage.getItem(CLIENTS_KEY) || '""')); } catch (e) { return []; } }
+  function saveClients() { try { localStorage.setItem(CLIENTS_KEY, JSON.stringify(state.clients.join('|'))); } catch (e) { /* sem armazenamento */ } }
+  const GROUPS_KEY = 'op360.hostgroups.v1';
+  function loadGroups() { try { return parseClients(JSON.parse(localStorage.getItem(GROUPS_KEY) || '""')); } catch (e) { return []; } }
+  function saveGroups() { try { localStorage.setItem(GROUPS_KEY, JSON.stringify(state.groups.join('|'))); } catch (e) { /* sem armazenamento */ } }
   function writeUrl() {
     const q = new URLSearchParams();
     if (state.preset) q.set('preset', state.preset); else { q.set('from', state.from); q.set('to', state.to); }
     if (state.hostid) q.set('hostid', state.hostid);
     if (state.ticket) q.set('ticket', state.ticket);
-    if (state.client) q.set('client', state.client);
-    if (state.entity) q.set('entity', state.entity);
+    if (state.clients.length) q.set('client', state.clients.join('|'));
+    if (state.groups.length) q.set('group', state.groups.join('|'));
     history.replaceState(null, '', `${location.pathname}?${q}`);
   }
   function syncForm() {
     $('#from').value = state.from; $('#to').value = state.to;
-    $('#client').value = state.client; $('#ticket').value = state.ticket;
-    if ($('#entity') && state.entity) $('#entity').value = state.entity;
+    $('#ticket').value = state.ticket;
+    renderClientSel();
     $$('.presets button').forEach((b) => b.classList.toggle('on', b.dataset.preset === state.preset));
   }
   function setHost(id) { closeDrawer(); state.hostid = id; syncForm(); load(); }
-  function setClient(name) { closeDrawer(); state.client = state.client === name ? '' : name; state.hostid = ''; syncForm(); load(); }
+  /** Marca ou desmarca um cliente (clique nos gráficos, no seletor ou nas etiquetas) e recarrega. */
+  function toggleClient(name, on) {
+    const has = state.clients.includes(name);
+    if (on === undefined) on = !has;
+    if (on === has) return;
+    state.clients = on ? [...state.clients, name] : state.clients.filter((c) => c !== name);
+    clientsChanged();
+  }
+  function setClients(list) { state.clients = [...list]; clientsChanged(); }
+  let clientTimer = null;
+  function clientsChanged() {
+    closeDrawer(); state.hostid = ''; saveClients(); syncForm();
+    if (window.OP360) { OP360.clients = state.clients; OP360.groups = state.groups; }
+    clearTimeout(clientTimer); clientTimer = setTimeout(load, 350); // vários cliques seguidos geram uma só consulta
+  }
+  const setClient = (name) => toggleClient(name);
+  const clientLabel = () => (state.clients.length ? state.clients.join(', ') : '');
+
+  /** Botão do seletor + etiquetas dos clientes escolhidos (sempre visíveis na tela). */
+  function renderClientSel() {
+    const btn = $('#clientBtn'), n = state.clients.length;
+    btn.textContent = n === 0 ? 'Todos os clientes' : n === 1 ? state.clients[0] : `${n} clientes selecionados`;
+    btn.title = n ? state.clients.join(', ') : 'Todos os clientes';
+    btn.classList.toggle('has', n > 0);
+    const bar = $('#clientChips');
+    bar.hidden = n === 0;
+    bar.innerHTML = n ? `<span class="sel-lbl">Exibindo ${n === 1 ? 'o cliente' : `os ${n} clientes`}:</span>`
+      + state.clients.map((c) => `<button type="button" class="chip" data-client="${esc(c)}" title="Remover ${esc(c)}">${esc(c)} <em aria-hidden="true">×</em></button>`).join('')
+      + '<button type="button" class="chip clear" data-client-all>Ver todos os clientes</button>' : '';
+    $$('#clientList input[type="checkbox"]').forEach((cb) => { cb.checked = state.clients.includes(cb.value); });
+  }
 
   /* ---------------- KPIs com contagem animada */
   function countTo(el, target, fmt) {
@@ -141,8 +179,8 @@
     setKpi('mttr_zbx', dur(k.mttr_zbx), k.mttr_zbx_n ? `${nf.format(k.mttr_zbx_n)} alertas · até recuperar` : 'sem recuperações');
     setKpi('mttr_glpi', dur(k.mttr_glpi), k.mttr_glpi_n ? `${nf.format(k.mttr_glpi_n)} chamados · até solucionar` : 'sem chamados');
 
-    fillEntities(d.entities, d.entity);
     fillClients(d.clients);
+    fillGroups(d.hostgroups, d.groups_in_use);
     renderSources(d);
     renderTicker(d.active);
     renderClientCharts(d.clients);
@@ -157,24 +195,66 @@
     $('#srcGlpi').href = d.links.glpi;
   }
 
-  /** Entidades que o usuário pode ver com host groups configurados (seletor só aparece com mais de uma). */
-  function fillEntities(list, cur) {
-    const sel = $('#entity'), wrap = $('#entityWrap');
-    if (!sel || !wrap) return;
-    wrap.hidden = !list || list.length < 2;
-    const html = (list || []).map((e) => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
-    if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; }
-    if (cur != null) { state.entity = String(cur); sel.value = String(cur); }
+  /** Lista de clientes do seletor (entidades logo abaixo da raiz), com a contagem de cada um; escolhas que não existem mais saem. */
+  let clientRows = [];
+  function fillClients(clients) {
+    clientRows = clients || [];
+    const known = new Set(clientRows.map((c) => c.name));
+    const kept = state.clients.filter((c) => known.has(c));
+    if (kept.length !== state.clients.length) { state.clients = kept; saveClients(); writeUrl(); }
+    drawClientList();
+    renderClientSel();
+  }
+  function drawClientList() {
+    const term = $('#clientSearch').value.trim().toLowerCase();
+    const rows = clientRows.filter((c) => !term || c.name.toLowerCase().includes(term));
+    $('#clientList').innerHTML = rows.length ? rows.map((c) => `
+      <label class="cp-item"><input type="checkbox" value="${esc(c.name)}" ${state.clients.includes(c.name) ? 'checked' : ''}>
+        <span title="${esc(c.name)}">${esc(c.name)}</span>
+        <small>${c.tickets + c.open + c.alerts ? `${nf.format(c.tickets)} ch. · ${nf.format(c.alerts)} al.` : ''}</small></label>`).join('')
+      : '<div class="cp-empty">Nenhum cliente encontrado.</div>';
+  }
+  function openClientPop(open) {
+    $('#clientPop').hidden = !open;
+    $('#clientBtn').setAttribute('aria-expanded', String(open));
+    if (open) { $('#clientSearch').value = ''; drawClientList(); $('#clientSearch').focus(); }
   }
 
-  /** Lista de clientes (entidades filhas da entidade do painel); os host groups do Zabbix ficam num grupo à parte. */
-  function fillClients(clients) {
-    const sel = $('#client'), cur = state.client;
-    const opt = (c) => `<option value="${esc(c.name)}">${esc(c.name)}${c.tickets + c.open + c.alerts ? ` · ${nf.format(c.tickets)} ch. · ${nf.format(c.alerts)} al.` : ''}</option>`;
-    const g = clients.filter((c) => c.kind === 'glpi'), z = clients.filter((c) => c.kind !== 'glpi');
-    const html = `<option value="">Todos os clientes</option>${g.map(opt).join('')}${z.length ? `<optgroup label="Só no Zabbix">${z.map(opt).join('')}</optgroup>` : ''}`;
-    if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; }
-    sel.value = cur;
+  /* ---------------- host groups do Zabbix (escolha no próprio painel; sem escolha, os ligados aos clientes) */
+  const grpQ = () => (state.groups.length ? `&group=${encodeURIComponent(state.groups.join('|'))}` : '');
+  let groupRows = [], groupsInUse = [];
+  function fillGroups(rows, inUse) {
+    groupRows = rows || []; groupsInUse = inUse || [];
+    const known = new Set(groupRows.map((g) => g.id));
+    const kept = state.groups.filter((g) => known.has(g));
+    if (kept.length !== state.groups.length) { state.groups = kept; saveGroups(); writeUrl(); }
+    drawGroupList(); renderGroupSel();
+  }
+  function renderGroupSel() {
+    const btn = $('#groupBtn'), n = state.groups.length;
+    const nameOf = (id) => (groupRows.find((g) => g.id === id) || {}).name || id;
+    btn.textContent = n === 0 ? 'Automático (por cliente)' : n === 1 ? nameOf(state.groups[0]) : `${n} host groups`;
+    btn.title = n ? state.groups.map(nameOf).join(', ') : `Host groups ligados aos clientes (${groupsInUse.length} em uso)`;
+    btn.classList.toggle('has', n > 0);
+  }
+  function drawGroupList() {
+    const term = $('#groupSearch').value.trim().toLowerCase();
+    const rows = groupRows.filter((g) => !term || g.name.toLowerCase().includes(term) || (g.client || '').toLowerCase().includes(term));
+    $('#groupList').innerHTML = rows.length ? rows.map((g) => `
+      <label class="cp-item"><input type="checkbox" value="${esc(g.id)}" ${state.groups.includes(g.id) ? 'checked' : ''}>
+        <span title="${esc(g.name)}">${esc(g.name)}</span><small>${g.client ? esc(g.client) : ''}</small></label>`).join('')
+      : '<div class="cp-empty">Nenhum host group encontrado.</div>';
+  }
+  function openGroupPop(open) {
+    $('#groupPop').hidden = !open;
+    $('#groupBtn').setAttribute('aria-expanded', String(open));
+    if (open) { $('#groupSearch').value = ''; drawGroupList(); $('#groupSearch').focus(); }
+  }
+  let groupTimer = null;
+  function groupsChanged() {
+    closeDrawer(); state.hostid = ''; saveGroups(); syncForm(); renderGroupSel();
+    if (window.OP360) OP360.groups = state.groups;
+    clearTimeout(groupTimer); groupTimer = setTimeout(load, 350);
   }
 
   /** Cada item da linha leva direto ao alerta no Zabbix (nova aba). */
@@ -216,7 +296,7 @@
     const list = rows.slice(0, limit), max = Math.max(1, ...list.map((r) => r.total));
     if (!list.length) { el.innerHTML = `<div class="bd-empty">${empty}</div>`; return; }
     el.innerHTML = list.map((r, i) => `
-      <div class="brow ${selected && selected === r.name ? 'on' : ''}" data-name="${esc(r.name)}">
+      <div class="brow ${(Array.isArray(selected) ? selected.includes(r.name) : selected && selected === r.name) ? 'on' : ''}" data-name="${esc(r.name)}">
         <span class="rk">${String(i + 1).padStart(2, '0')}</span>
         <button type="button" class="nm" data-act="name" title="${esc(r.name)}">${esc(r.name)}</button>
         <div class="bt"><div class="bw" style="width:${Math.max(4, (r.total / max) * 100)}%">
@@ -276,7 +356,7 @@
       board(id, rows, { segs: STAT, cols: tkCols, limit: opts.limit || 10, selected: opts.selected,
         onName: opts.onName || ((n) => lst(what)(n, null, rows)), onSeg: (n, s) => lst(what)(n, s, rows), empty: 'Sem chamados' });
     };
-    mk('bdTkClient', 'lgTkClient', per, (t) => t.client || 'Sem cliente', 'Cliente', { selected: state.client || null, onName: (n) => setClient(n) });
+    mk('bdTkClient', 'lgTkClient', per, (t) => t.client || 'Sem cliente', 'Cliente', { selected: state.clients, onName: (n) => setClient(n) });
     mk('bdStGroup', 'lgStGroup', all, (t) => t.group || 'Sem grupo', 'Grupo');
     mk('bdStTech', 'lgStTech', all, (t) => cleanName(t.tech) || 'Sem responsável', 'Responsável', { limit: 12 });
 
@@ -321,7 +401,7 @@
     legend('lgAlClient', SV, sum, 'al');
     const rows = base.map((r) => ({ ...r, segs: Object.fromEntries(SV.map((s) => [s.k, !fa.size || fa.has(s.k) ? r.segs[s.k] : 0])) }))
       .map((r) => ({ ...r, total: SV.reduce((a, s) => a + r.segs[s.k], 0) })).filter((r) => r.total).sort((a, b) => b.total - a.total);
-    board('bdAlClient', rows, { segs: SV, selected: state.client || null, onName: (n) => setClient(n), onSeg: (n) => setClient(n), limit: 10, empty: 'Sem alertas no período',
+    board('bdAlClient', rows, { segs: SV, selected: state.clients, onName: (n) => setClient(n), onSeg: (n) => setClient(n), limit: 10, empty: 'Sem alertas no período',
       cols: [{ h: 'Ativos', fn: (r) => nz(r.active, '') }, { h: 'Sem ACK', fn: (r) => nz(r.unacked, 'warn') }] });
   }
 
@@ -402,7 +482,7 @@
     $('#ticketChips').innerHTML = Object.entries(views).map(([k, [label, fn]]) =>
       `<button type="button" class="chip ${local.ticketView === k ? 'on' : ''}" data-view="${k}">${label} <b>${all.filter(fn).length}</b></button>`).join('');
     const rows = sortRows($('#tblTickets'), all.filter(views[local.ticketView][1]));
-    $('#ticketsHint').textContent = `${rows.length} exibido(s) · ${data.kpi.tickets} no período · ${data.kpi.backlog} em aberto${state.client ? ` · ${state.client}` : ''}`;
+    $('#ticketsHint').textContent = `${rows.length} exibido(s) · ${data.kpi.tickets} no período · ${data.kpi.backlog} em aberto${state.clients.length ? ` · ${clientLabel()}` : ''}`;
     const prColor = { 6: C.critical, 5: C.critical, 4: C.serious, 3: C.warning, 2: C.sev[1], 1: C.muted };
     const slaCell = (t) => t.late ? '<span class="state critical">atrasado</span>'
       : t.open ? (t.pending ? '<span class="state warning">pendente</span>' : '<span class="state unknown">no prazo</span>')
@@ -463,9 +543,10 @@
 
   async function load() {
     writeUrl();
+    if (window.OP360) { OP360.clients = state.clients; OP360.groups = state.groups; }
     const q = new URLSearchParams({ action: 'data', from: state.from, to: state.to });
-    if (state.client) q.set('client', state.client);
-    if (state.entity) q.set('entity', state.entity);
+    if (state.clients.length) q.set('client', state.clients.join('|'));
+    if (state.groups.length) q.set('group', state.groups.join('|'));
     if (state.hostid) q.set('hostid', state.hostid);
     if (state.ticket) q.set('ticket', state.ticket);
     $('#reload').classList.add('spin'); document.body.classList.add('loading');
@@ -498,14 +579,34 @@
     const f = $('#from').value, t = $('#to').value;
     if (f > t) { toast('A data inicial é maior que a final.'); return; }
     if (f !== state.from || t !== state.to) state.preset = '';
-    Object.assign(state, { from: f, to: t, client: $('#client').value, ticket: $('#ticket').value.trim(), entity: $('#entity') ? $('#entity').value : state.entity });
+    Object.assign(state, { from: f, to: t, ticket: $('#ticket').value.trim() });
     syncForm(); load();
   });
-  $('#client').addEventListener('change', () => { state.client = $('#client').value; state.hostid = ''; load(); });
-  $('#entity').addEventListener('change', () => { state.entity = $('#entity').value; state.client = ''; state.hostid = ''; state.ticket = ''; syncForm(); load(); });
+  // seletor de clientes (vários) e etiquetas dos escolhidos
+  $('#clientBtn').addEventListener('click', () => openClientPop($('#clientPop').hidden));
+  $('#cpClose').addEventListener('click', () => openClientPop(false));
+  $('#cpAll').addEventListener('click', () => { setClients([]); openClientPop(false); });
+  $('#clientSearch').addEventListener('input', drawClientList);
+  $('#groupBtn').addEventListener('click', () => openGroupPop($('#groupPop').hidden));
+  $('#gpClose').addEventListener('click', () => openGroupPop(false));
+  $('#gpAll').addEventListener('click', () => { state.groups = []; groupsChanged(); openGroupPop(false); });
+  $('#groupSearch').addEventListener('input', drawGroupList);
+  $('#groupList').addEventListener('change', (ev) => {
+    const cb = ev.target.closest('input[type="checkbox"]'); if (!cb) return;
+    state.groups = cb.checked ? [...new Set([...state.groups, cb.value])] : state.groups.filter((g) => g !== cb.value);
+    groupsChanged();
+  });
+  document.addEventListener('click', (ev) => { if (!$('#groupPop').hidden && !ev.target.closest('#groupPick')) openGroupPop(false); });
+  $('#clientList').addEventListener('change', (ev) => { const cb = ev.target.closest('input[type="checkbox"]'); if (cb) toggleClient(cb.value, cb.checked); });
+  $('#clientChips').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.hasAttribute('data-client-all')) setClients([]); else toggleClient(b.dataset.client, false);
+  });
+  document.addEventListener('click', (ev) => { if (!$('#clientPop').hidden && !ev.target.closest('#clientPick')) openClientPop(false); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('#clientPop').hidden) { openClientPop(false); $('#clientBtn').focus(); } });
   $('#clear').addEventListener('click', () => {
     closeDrawer();
-    applyPreset('7'); state.hostid = ''; state.ticket = ''; state.client = ''; state.entity = '';
+    applyPreset('7'); state.hostid = ''; state.ticket = ''; state.clients = []; state.groups = []; saveClients(); saveGroups();
     Object.assign(local, { sev: null, noack: false, ticketView: 'all' });
     syncForm(); load();
   });
@@ -598,14 +699,14 @@
     pn.dataset.kind = kind; pn.hidden = false; pn.innerHTML = '<div class="ld">Carregando…</div>';
     try {
       if (kind === 'host') {
-        const r = await getJson(`action=hostlog&hostid=${btn.dataset.hostid}&entity=${state.entity}`);
+        const r = await getJson(`action=hostlog&hostid=${btn.dataset.hostid}${grpQ()}`);
         pn.innerHTML = `<div class="ph">Histórico de ${esc(r.host)} · últimos ${r.days} dias · ${r.events.length} alerta(s)</div>` +
           (r.events.length ? r.events.map((e) => `<a class="ev" href="${esc(e.url)}" target="_blank" rel="noopener" style="--c:${C.sev[e.severity]}">
             <i class="dot"></i><span class="en">${esc(e.name)}</span>
             <span class="em">${SEV[e.severity]} · ${when(e.clock)} · ${e.end ? `durou ${dur(e.end - e.clock)}` : '<b class="w">ainda ativo</b>'} · ${e.acknowledged ? 'reconhecido' : 'sem ACK'}</span></a>`).join('')
             : '<div class="none">Sem alertas nesse período.</div>') + `<a class="ab" href="${esc(r.url)}" target="_blank" rel="noopener">Ver todos no Zabbix ↗</a>`;
       } else {
-        const r = await getJson(`action=ticketlog&id=${btn.dataset.tid}&from=${state.from}&to=${state.to}&entity=${state.entity}`);
+        const r = await getJson(`action=ticketlog&id=${btn.dataset.tid}&from=${state.from}&to=${state.to}${grpQ()}`);
         pn.innerHTML = `<div class="ph">${r.items.length} registro(s) no chamado</div>` + r.items.map((x) => `<div class="tl ${x.kind === 'solução' ? 'sol' : ''}">
           <div class="th"><b>${esc(x.kind)}</b>${x.private ? ' <em>privado</em>' : ''}<span>${esc(x.author || '—')} · ${dateBr(x.date)}</span></div>
           <div class="tx">${esc(x.text || '(sem texto)')}</div></div>`).join('');
@@ -636,7 +737,7 @@
     const k = data.kpi, zbx = data.active || [], tk = data.tickets_list || [];
     const mkA = (arr) => arr.map((p) => ({ ...p, _q: `${p.host} ${p.name}`.toLowerCase() }));
     const mkT = (arr) => arr.map((t) => ({ ...t, _q: `${t.id} ${t.client} ${t.name} ${t.status}`.toLowerCase() }));
-    const scope = state.client ? ` · ${esc(state.client)}` : '';
+    const scope = state.clients.length ? ` · ${esc(clientLabel())}` : '';
     const aTiles = [...SHOWN.map((s) => ({ label: SEV[s], color: C.sev[s], fn: (p) => p.severity === s })),
       { label: 'Sem ACK', color: 'var(--accent)', fn: (p) => !p.acknowledged }];
     const tTiles = [{ label: 'No prazo', color: '#3fcf6f', fn: (t) => t.open && !t.late && !t.pending },
@@ -658,7 +759,7 @@
       const arr = tk.filter(fn).sort((a, b) => rank(a) - rank(b) || String(a.date).localeCompare(String(b.date)));
       openDrawer({ title: { tickets: 'Chamados do período', pending: 'Chamados pendentes', overdue: 'Chamados atrasados' }[kind], icon: kind,
         color: { tickets: 'var(--series-2)', pending: C.warning, overdue: C.critical }[kind], items: mkT(arr), render: (t) => ticketItem(t), tiles: tTiles,
-        sub: `Do mais crítico para o mais tranquilo · entidade selecionada e filhas${scope}` });
+        sub: `Do mais crítico para o mais tranquilo · cliente(s) selecionado(s)${scope}` });
     } else if (kind === 'mttd_glpi' || kind === 'mttr_glpi') {
       const m = kind === 'mttd_glpi' ? 'mttd' : 'mttr';
       const arr = tk.filter((t) => (m === 'mttd' ? t.take_seconds > 0 : t.resolve_seconds != null))

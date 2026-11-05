@@ -9,7 +9,10 @@
     // só dentro do painel Operacional 360 (e da topologia); nunca nas telas do GLPI nem de outros plugins
     if (window.CFG_GLPI) return;
     if (window.OP360ALERTAS || !document.body || document.querySelector('.page-anonymous, form#login_form, .login-page')) return;
-    const api = ((window.OP360 && OP360.api) || '/api') + '?action=alertas';
+    const apiBase = ((window.OP360 && OP360.api) || '/api') + '?action=alertas';
+    // os alertas seguem os clientes escolhidos na tela (sem escolha, todos)
+    const apiUrl = () => apiBase + (window.OP360 && OP360.clients && OP360.clients.length ? '&client=' + encodeURIComponent(OP360.clients.join('|')) : '')
+      + (window.OP360 && OP360.groups && OP360.groups.length ? '&group=' + encodeURIComponent(OP360.groups.join('|')) : '');
     const KEY = 'op360.alertas.v1';
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
     const store = {
@@ -298,7 +301,7 @@
     async function load() {
         if (stopped) return;
         try {
-            const r = await fetch(api, {headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store'});
+            const r = await fetch(apiUrl(), {headers: {Accept: 'application/json'}, credentials: 'same-origin', cache: 'no-store'});
             if (r.status === 401 || r.status === 403 || r.status === 404) { stopped = true; return; }
             const d = await r.json();
             if (!d.ok) return;
@@ -316,7 +319,7 @@
     window.OP360ALERTAS = {
         async test(key = 'zbx_5') {
             unlock();
-            const d = await (await fetch(api, {credentials: 'same-origin'})).json();
+            const d = await (await fetch(apiUrl(), {credentials: 'same-origin'})).json();
             const t = d.tipos[key];
             if (t) show({group: t.group, label: t.label, icon: t.icon, color: t.color, tone: t.tone, title: `Teste · ${t.label}`, message: 'Assim chega este tipo de alerta.', url: '', speech: `Teste de alerta: ${t.label}.`,
                 popup: true, sound: t.channels.includes('sound'), voice: t.channels.includes('voice'), sticky: false, flag: false}, true);

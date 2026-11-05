@@ -3,16 +3,15 @@
 /**
  * Plugin "Operacional 360" para GLPI 11 e 12.
  *
- * Painel operacional por entidade: os chamados da entidade e das filhas (GLPI) e os
+ * Painel operacional por cliente: os chamados do cliente (GLPI da OAK) e os
  * alertas do Zabbix dos host groups ligados a ela, com o mesmo layout e tema do NOC 360.
- * A configuração (entidade → host group → severidades) é só para o administrador.
+ * Sem tela de configuração: usa os mesmos acessos do NOC 360; clientes e host groups são escolhidos no painel.
  */
 
 use Glpi\Plugin\Hooks;
 use GlpiPlugin\Operacional360\Menu;
-use GlpiPlugin\Operacional360\Settings;
 
-define('PLUGIN_OPERACIONAL360_VERSION', '1.0.0');
+define('PLUGIN_OPERACIONAL360_VERSION', '2.0.0');
 define('PLUGIN_OPERACIONAL360_MIN_GLPI', '11.0.0');
 define('PLUGIN_OPERACIONAL360_MAX_GLPI', '12.0.99');
 
@@ -25,15 +24,11 @@ function plugin_init_operacional360(): void
     // seção "Operacional" no menu lateral, no topo (também para menus guardados antes do plugin)
     $PLUGIN_HOOKS[Hooks::MENU_TOADD]['operacional360']     = [Menu::SECTOR => [Menu::class]];
     $PLUGIN_HOOKS[Hooks::REDEFINE_MENUS]['operacional360'] = 'plugin_operacional360_redefine_menus';
-
-    // configuração (Configurar → Plugins), só para o administrador; token do Zabbix cifrado no banco
-    $PLUGIN_HOOKS[Hooks::CONFIG_PAGE]['operacional360']        = 'front/config.form.php';
-    $PLUGIN_HOOKS[Hooks::SECURED_CONFIGS]['operacional360']    = ['zabbix_token'];
 }
 
 /**
  * Aplicado a cada desenho do menu: garante a seção "Operacional" com o painel
- * (e a configuração, quando o perfil pode configurar), logo abaixo de "Sistemas Internos".
+ * logo abaixo de "Sistemas Internos".
  */
 function plugin_operacional360_redefine_menus(array $menu): array
 {
