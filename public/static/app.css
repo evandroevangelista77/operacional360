@@ -655,3 +655,6 @@ table.hr-t { width: 100%; border-collapse: collapse; font-size: 12.5px; font-var
 .filters .cp-item small { margin-left: auto; font-size: 11px; text-transform: none; letter-spacing: 0; white-space: nowrap; }
 .filters .cp-actions { flex-direction: row; justify-content: space-between; }
 @media (max-width: 700px) { .filters .cp-pop { width: min(340px, calc(100vw - 32px)); } .filters .clientpick { width: 100%; } .filters .cp-btn { max-width: none; width: 100%; } }
+
+/* a barra de filtros (e o menu de seleção aberto) fica acima dos cartões, que também têm desfoque e vazavam por cima da lista */
+.filters { position: relative; z-index: 30; }
