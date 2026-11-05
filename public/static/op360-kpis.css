@@ -103,11 +103,12 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
   a { color: inherit !important; text-decoration: none !important; }
 
   /* cabeçalho de cada página */
-  .kphead { display: flex; align-items: center; gap: 4mm; padding-bottom: 2.5mm; margin-bottom: 3mm; border-bottom: 2px solid var(--accent); }
-  .kphead .kp-logo { width: 21mm; color: #1b3a6b; flex: none; }
+  .kphead { display: flex; align-items: center; gap: 4mm; padding: 2mm 5mm; margin-bottom: 3mm; border-radius: 2.5mm; color: #fff;
+    background: linear-gradient(135deg, #0a1b38 0%, #12305e 60%, #087E83 150%) !important; }
+  .kphead .kp-logo { width: 21mm; color: #fff; flex: none; }
   .kphead div { display: flex; flex-direction: column; gap: 0.6mm; }
-  .kphead b { font-size: 15px; letter-spacing: -0.01em; color: #0f1f3a; }
-  .kphead span { font-size: 9px; color: var(--muted); }
+  .kphead b { font-size: 15px; letter-spacing: -0.01em; color: #fff; }
+  .kphead span { font-size: 9px; color: #c9d8ee; }
   .kfooter { color: #667791; }
 
   /* capa */
