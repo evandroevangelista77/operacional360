@@ -68,7 +68,26 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
 .kpi-head { align-items: center; }
 .kcover, .kphead { display: none; }
 
-/* ---------------- PDF: A4 paisagem, fundo claro, uma folha por bloco */
+/* assinatura e envio */
+.kpi-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#kpiSignBtn { min-height: 38px; padding: 0 16px; border-radius: 8px; cursor: pointer; background: transparent; border: 1px solid var(--accent); color: var(--text); font-weight: 600; }
+.kpi-sign { margin: 0 0 16px; padding: 16px 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--ring); border-left: 3px solid var(--accent); }
+.kpi-sign[hidden] { display: none; }
+.kpi-sign h3 { margin: 0 0 6px; font-size: 14px; } .kpi-sign p { margin: 0 0 12px; font-size: 12.5px; color: var(--text-2); max-width: 900px; line-height: 1.5; }
+.kpi-sign form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.kpi-sign label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.kpi-sign input { min-width: 320px; }
+.ks-msg { margin-top: 10px; font-size: 12.5px; color: var(--text-2); } .ks-msg:empty { display: none; }
+.ks-msg.ok { color: var(--good); } .ks-msg.err { color: var(--critical); } .ks-msg a { color: var(--accent-text); }
+.ks-list { margin-top: 12px; }
+.kt-tbl.ks th:nth-child(3) { width: 34%; } .kt-tbl.ks th:nth-child(4) { width: 25%; }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--grid); color: var(--text-2); }
+.pill.ok { background: rgba(52, 211, 153, .18); color: var(--good); } .pill.warn { background: rgba(250, 178, 25, .18); color: var(--warning); }
+.kt-tbl small.err { display: block; margin-top: 3px; color: var(--critical); font-size: 10.5px; max-height: 2.8em; overflow: hidden; }
+.kt-tbl td.act { text-align: right; white-space: nowrap; } .kt-tbl td.act button, .kt-tbl td.act a { margin-left: 6px; font-size: 11.5px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--ring); background: transparent; color: var(--text-2); cursor: pointer; text-decoration: none; }
+.kt-tbl td.act a { color: var(--accent-text); border-color: var(--accent); }
+
+/* ---------------- (legado) impressão pelo navegador: A4 paisagem, fundo claro, uma folha por bloco */
 @page { size: A4 landscape; margin: 8mm; }
 @media print {
   :root { color-scheme: light; --page: #fff; --surface: #fff; --surface-2: #f3f6fb; --ring: #cfd8e6; --text: #0f1f3a; --text-2: #34465f; --muted: #667791;

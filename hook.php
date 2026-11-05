@@ -24,6 +24,13 @@ function plugin_operacional360_install(): bool
         }
     }
 
+    // solicitações de assinatura/envio do relatório de KPI's
+    GlpiPlugin\Operacional360\Signoff::createTable();
+    CronTask::register(GlpiPlugin\Operacional360\Signoff::class, 'syncsignoffs', 300, [
+        'comment' => "Confere as assinaturas dos relatórios de KPI's e envia o PDF assinado ao cliente",
+        'mode'    => CronTask::MODE_EXTERNAL,
+        'state'   => CronTask::STATE_WAITING,
+    ]);
     unset($_SESSION['glpimenu']);
 
     return true;
@@ -34,6 +41,8 @@ function plugin_operacional360_uninstall(): bool
     ProfileRight::deleteProfileRights([Menu::$rightname]);
     // configuração antiga (versões até 1.x guardavam tokens e mapa no banco): remove
     Config::deleteConfigurationValues('plugin:operacional360');
+    GlpiPlugin\Operacional360\Signoff::dropTable();
+    CronTask::unregister('operacional360');
     unset($_SESSION['glpimenu']);
 
     return true;

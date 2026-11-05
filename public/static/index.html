@@ -209,8 +209,21 @@
   <div class="kpi-head">
     <i class="kp-logo kp-logo-screen" role="img" aria-label="OAKMONT Group"></i>
     <div class="kpi-title"><span class="kpi-brand">Operacional <b>360°</b></span><h2>Relatório executivo de KPI's</h2><p id="kpiMeta"></p></div>
-    <button type="button" class="primary" id="kpiPdf" title="Abre a impressão em paisagem: escolha &quot;Salvar como PDF&quot;">Gerar PDF (paisagem)</button>
+    <div class="kpi-actions">
+      <button type="button" class="primary" id="kpiPdf" title="Baixa o relatório em PDF, A4 paisagem">Baixar PDF (paisagem)</button>
+      <button type="button" class="ghost" id="kpiSignBtn" aria-expanded="false" title="O gestor assina no LibreSign e o PDF assinado vai por e-mail ao cliente">Assinar e enviar ao cliente</button>
+    </div>
   </div>
+  <section class="kpi-sign" id="kpiSign" hidden aria-label="Assinatura e envio">
+    <h3>Assinatura do gestor e envio ao cliente</h3>
+    <p>O relatório (A4 paisagem, com o espaço da assinatura no fim) é enviado ao <b>LibreSign</b> para o gestor assinar digitalmente. Quando a assinatura for concluída, o <b>PDF assinado é enviado por e-mail</b> ao cliente.</p>
+    <form id="kpiSignForm" autocomplete="off">
+      <label>E-mail do cliente <input type="email" id="kpiClientMail" required placeholder="cliente@empresa.com.br" maxlength="190"></label>
+      <button type="submit" class="primary" id="kpiSignGo">Enviar para assinatura</button>
+    </form>
+    <div class="ks-msg" id="kpiSignMsg" role="status" aria-live="polite"></div>
+    <div class="ks-list" id="kpiSignList"></div>
+  </section>
   <div id="kpiBody"></div>
 </section>
 

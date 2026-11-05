@@ -253,10 +253,69 @@
   }
   $$('#viewTabs button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   document.addEventListener('op360:data', (ev) => { last = ev.detail; if (document.body.classList.contains('view-kpi')) render(last); });
+  /* ---------------- PDF (gerado no servidor, sempre em paisagem) e assinatura */
+  const OPC = () => window.OP360 || {};
+  const filterQs = () => {
+    const f = (last && last.filters) || {};
+    const q = new URLSearchParams({ from: f.from || '', to: f.to || '' });
+    if (f.clients && f.clients.length) q.set('client', f.clients.join('|'));
+    if (f.groups && f.groups.length) q.set('group', f.groups.join('|'));
+    return q;
+  };
+  const call = async (action, extra = {}) => {
+    const q = filterQs(); q.set('action', action); q.set('t', OPC().t || '');
+    Object.entries(extra).forEach(([k, v]) => q.set(k, v));
+    const r = await fetch(`${OPC().api || '/api'}?${q}`, { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+    return j;
+  };
   $('#kpiPdf').addEventListener('click', () => {
     if (!last) return;
-    const t = document.title; document.title = `Operacional 360 - KPIs - ${(last.filters.from || '')} a ${(last.filters.to || '')}`;
-    window.print(); setTimeout(() => { document.title = t; }, 1500);
+    const a = document.createElement('a');
+    a.href = `${OPC().pdf || '/pdf'}?${filterQs()}`;
+    a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+  });
+  const msg = (t, kind = '') => { const el = $('#kpiSignMsg'); el.className = `ks-msg ${kind}`; el.innerHTML = t; };
+  const badge = (s) => ({ pending: 'warn', signed: 'warn', sent: 'ok', canceled: '' }[s] || '');
+  async function loadSign() {
+    try {
+      const { items } = await call('sign_list');
+      $('#kpiSignList').innerHTML = items.length ? `<table class="kt-tbl ks"><thead><tr><th>Relatório</th><th>E-mail do cliente</th><th>Situação</th><th></th></tr></thead><tbody>${items.map((r) => `
+        <tr><td class="ell" title="${esc(r.title)}">${esc(r.clients)} · ${esc(r.period)}</td><td class="ell">${esc(r.client_email)}</td>
+          <td><span class="pill ${badge(r.status)}">${esc(r.label)}</span>${r.error ? `<small class="err" title="${esc(r.error)}">${esc(r.error)}</small>` : ''}</td>
+          <td class="act">${r.status === 'pending' ? `<a href="${esc(r.sign_url)}" target="_blank" rel="noopener">Abrir LibreSign</a><button type="button" data-act="sync" data-id="${r.id}">Verificar</button><button type="button" data-act="cancel" data-id="${r.id}">Cancelar</button>` : ''}
+            ${r.status === 'signed' ? `<button type="button" data-act="resend" data-id="${r.id}">Reenviar e-mail</button>` : ''}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="k-empty">Nenhum relatório enviado para assinatura ainda.</div>';
+      if (items.some((r) => r.status === 'pending') && !$('#kpiSign').hidden) { clearTimeout(loadSign.t); loadSign.t = setTimeout(loadSign, 30000); }
+    } catch (err) { $('#kpiSignList').innerHTML = `<div class="k-empty">${esc(err.message)}</div>`; }
+  }
+  $('#kpiSignBtn').addEventListener('click', () => {
+    const open = $('#kpiSign').hidden;
+    $('#kpiSign').hidden = !open; $('#kpiSignBtn').setAttribute('aria-expanded', String(open));
+    if (open) { loadSign(); $('#kpiClientMail').focus(); }
+  });
+  $('#kpiSignForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!last) { msg('Aguarde os indicadores carregarem.', 'err'); return; }
+    const email = $('#kpiClientMail').value.trim();
+    $('#kpiSignGo').disabled = true; msg('Gerando o PDF e enviando ao LibreSign…');
+    try {
+      const r = await call('sign_send', { email });
+      msg(`Enviado para assinatura. O LibreSign avisou o gestor em <b>${esc(r.signer_email)}</b> (o e-mail traz o link para assinar; também dá para <a href="${esc(r.sign_url)}" target="_blank" rel="noopener">abrir o LibreSign</a>). Assim que a assinatura for concluída, o PDF assinado segue para <b>${esc(email)}</b>.${r.warning ? `<br><small>${esc(r.warning)}</small>` : ''}`, 'ok');
+      $('#kpiClientMail').value = '';
+      loadSign();
+    } catch (err) { msg(esc(err.message), 'err'); } finally { $('#kpiSignGo').disabled = false; }
+  });
+  $('#kpiSignList').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-act]'); if (!b) return;
+    b.disabled = true;
+    try {
+      const r = await call(`sign_${b.dataset.act}`, { id: b.dataset.id });
+      if (b.dataset.act === 'sync') msg(r.status === 'sent' ? 'Assinado e enviado ao cliente.' : r.status === 'signed' ? `Assinado, mas o e-mail não saiu: ${esc(r.error || '')}` : 'Ainda aguardando a assinatura do gestor.', r.status === 'sent' ? 'ok' : '');
+      if (b.dataset.act === 'resend') msg(r.status === 'sent' ? 'E-mail enviado ao cliente.' : `E-mail não enviado: ${esc(r.error || '')}`, r.status === 'sent' ? 'ok' : 'err');
+    } catch (err) { msg(esc(err.message), 'err'); }
+    loadSign();
   });
   if (new URLSearchParams(location.search).get('view') === 'kpi') setView('kpi');
 })();

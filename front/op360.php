@@ -36,7 +36,7 @@ if (str_starts_with($path, '%2F')) {
 [$route, $query] = array_pad(explode('?', $path, 2), 2, '');
 parse_str($query, $q);
 $route = rawurldecode($route);
-if ($route === '' || str_contains($route, '..') || !preg_match('#^/(|api|static/.+)$#', $route)) {
+if ($route === '' || str_contains($route, '..') || !preg_match('#^/(|api|pdf|static/.+)$#', $route)) {
     http_response_code(404);
     return;
 }
@@ -55,6 +55,25 @@ if ($route === '/api') {
     } catch (Throwable $e) {
         http_response_code(502);
         echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    }
+    return;
+}
+
+// ------------------------------------------------------------------ PDF (A4 paisagem), gerado no servidor
+if ($route === '/pdf') {
+    try {
+        @set_time_limit(180);
+        $d = Api::data($q);
+        $pdf = \GlpiPlugin\Operacional360\Pdf::build($d, \GlpiPlugin\Operacional360\Signoff::manager());
+        $f = $d['filters'];
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="Operacional 360 - KPIs - ' . $f['from'] . ' a ' . $f['to'] . '.pdf"');
+        header('Cache-Control: no-store');
+        echo $pdf;
+    } catch (Throwable $e) {
+        http_response_code($e instanceof HttpError ? $e->status() : 502);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo 'Não foi possível gerar o PDF: ' . $e->getMessage();
     }
     return;
 }
@@ -85,7 +104,7 @@ $body = (string) file_get_contents($real);
 // caminhos absolutos (/api, /static) passam a apontar para este arquivo
 $body = preg_replace('#(["\'`(=])/(api|static)(?=[/?"\'`)\s]|$)#', '$1' . str_replace('$', '\\$', $prefix) . '/$2', $body);
 if ($ext === 'html') {
-    $config = json_encode(['api' => $prefix . '/api'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG);
+    $config = json_encode(['api' => $prefix . '/api', 'pdf' => $prefix . '/pdf', 't' => \GlpiPlugin\Operacional360\Signoff::token()], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG);
     $body = preg_replace('#</head>#i', '<script>window.OP360 = ' . $config . ';</script></head>', $body, 1);
     header('Cache-Control: no-cache');
 } else {

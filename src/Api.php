@@ -24,8 +24,34 @@ class Api
             'alertas'   => self::alertas($q),
             'hostlog'   => self::hostLog($q),
             'ticketlog' => self::ticketLog($q),
+            'sign_send'   => self::signSend($q),
+            'sign_list'   => ['items' => Signoff::recent()],
+            'sign_sync'   => self::signAct($q, 'sync'),
+            'sign_resend' => self::signAct($q, 'resend'),
+            'sign_cancel' => self::signAct($q, 'cancel'),
             default     => throw new HttpError(404, 'Ação desconhecida.'),
         };
+    }
+
+    /* ------------------------------------------------------------------ assinatura e envio do relatório */
+
+    private static function signSend(array $q): array
+    {
+        Signoff::checkToken((string) ($q['t'] ?? ''));
+        return Signoff::start(self::data($q), (string) ($q['email'] ?? ''));
+    }
+
+    private static function signAct(array $q, string $what): array
+    {
+        Signoff::checkToken((string) ($q['t'] ?? ''));
+        $row = Signoff::load((int) ($q['id'] ?? 0));
+        if ($what === 'cancel') {
+            $row->cancel();
+            return ['status' => 'canceled'];
+        }
+        $status = $what === 'resend' ? $row->deliver() : $row->sync();
+        $row->getFromDB($row->getID());
+        return ['status' => $status, 'error' => $row->fields['last_error']];
     }
 
     /* ------------------------------------------------------------------ painel */
