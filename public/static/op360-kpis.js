@@ -152,10 +152,28 @@
     // alertas: hosts e clientes
     const hostRows = (d.top_hosts || []).slice(0, 8).map((h) => ({ name: h.host, value: h.alerts, color: 'var(--series-1)' }));
     const alCli = (d.clients || []).filter((c) => c.alerts).sort((x, y) => y.alerts - x.alerts).slice(0, 8).map((c) => ({ name: c.name, value: c.alerts, color: 'var(--series-1)' }));
-    const foot = (n) => `<footer class="kfooter"><span>Operacional 360 · Relatório executivo de KPI's · ${fdate(f.from)} a ${fdate(f.to)}</span><span>Página ${n} de 4</span></footer>`;
+    const N = 5;
+    const foot = (n) => `<footer class="kfooter"><span>OAKMONT GROUP · Documento confidencial · ${esc(clients)} · ${fdate(f.from)} a ${fdate(f.to)}</span><span>Página ${n} de ${N}</span></footer>`;
+    const head = (t) => `<header class="kphead"><i class="kp-logo" role="img" aria-label="OAKMONT Group"></i><div><b>${esc(t)}</b><span>${esc(clients)} · ${fdate(f.from)} a ${fdate(f.to)}</span></div></header>`;
+    const cover = `<section class="kcover" aria-hidden="true">
+      <i class="kp-logo kc-logo"></i>
+      <div class="kc-main">
+        <span class="kc-tag">Relatório de entrega de serviços</span>
+        <h1>Indicadores de Operação<br>e Nível de Serviço</h1>
+        <p class="kc-sub">SLA · Volumetria · Tempos de atendimento e resolução · Monitoramento e alertas · Equipe responsável</p>
+        <dl class="kc-meta">
+          <div><dt>Cliente(s)</dt><dd>${esc(clients)}</dd></div>
+          <div><dt>Período</dt><dd>${fdate(f.from)} a ${fdate(f.to)}</dd></div>
+          <div><dt>Emitido em</dt><dd>${new Date(d.generated_at * 1000).toLocaleDateString('pt-BR')}</dd></div>
+        </dl>
+      </div>
+      <ol class="kc-index"><li>Resumo executivo</li><li>SLA e tempo de resolução</li><li>Volumetria e alertas</li><li>Equipe, chamados mais longos e pendências</li></ol>
+      <div class="kc-foot"><span>OAKMONT GROUP · Documento confidencial</span><span>Fonte: GLPI (chamados) e Zabbix (monitoramento) · Operacional 360</span></div>
+    </section>`;
 
-    host.innerHTML = `
+    host.innerHTML = cover + `
     <section class="kpage">
+      ${head('Resumo executivo')}
       <div class="kx-tiles">
         ${tile('SLA cumprido', pctTxt(sl.pct), `${nf.format(sl.ok)} de ${nf.format(sl.n)} resolvidos no prazo`, slaColor(sl.pct))}
         ${tile('Chamados no período', nf.format(k.tickets), `${nf.format(e.volume.resolved)} resolvidos · ${nf.format(k.backlog)} em aberto`, 'var(--series-2)')}
@@ -172,20 +190,22 @@
         <article class="kcard k4"><h3>SLA geral</h3><div class="kdonut">${donut(sl.pct, slaColor(sl.pct), pctTxt(sl.pct), 'meta 95%')}</div>
           <p class="kfoot">${nf.format(sl.open_late)} chamado(s) em aberto já estouraram o prazo.</p></article>
       </div>
-      ${foot(1)}
+      ${foot(5)}
     </section>
 
     <section class="kpage">
+      ${head('SLA e tempo de resolução')}
       <div class="kgrid">
         <article class="kcard k6"><h3>SLA por prioridade <small>chamados resolvidos</small></h3>${hbars(prioRows, { max: 100 })}</article>
         <article class="kcard k6"><h3>SLA por cliente <small>10 maiores volumes</small></h3>${hbars(cliSla, { max: 100 })}</article>
         <article class="kcard k12"><h3>Tendência do SLA <small>por dia de solução · meta de 95%</small></h3>${slaLine(sl.trend)}</article>
         <article class="kcard k12"><h3>Tempo de resolução <small>chamados resolvidos, por faixa · TMA ${dur(k.mttr_glpi)} · TME ${dur(k.mttd_glpi)}</small></h3>${columns(e.resolution.distribution)}</article>
       </div>
-      ${foot(2)}
+      ${foot(5)}
     </section>
 
     <section class="kpage">
+      ${head('Volumetria e alertas')}
       <div class="kgrid">
         <article class="kcard k8"><h3>Volumetria <small>chamados abertos × alertas por dia</small></h3>${dayChart(d.timeline)}</article>
         <article class="kcard k4"><h3>Alertas por severidade <small>(Zabbix)</small></h3>${hbars(sevRows, { empty: 'Sem alertas no período.' })}
@@ -196,25 +216,26 @@
         <article class="kcard k4"><h3>Alertas por cliente</h3>${hbars(alCli, { empty: 'Sem alertas no período.' })}
           <h3 class="sub">Hosts com mais alertas</h3>${hbars(hostRows, { empty: 'Sem alertas no período.' })}</article>
       </div>
-      ${foot(3)}
+      ${foot(5)}
     </section>
 
     <section class="kpage">
+      ${head('Equipe, chamados mais longos e pendências')}
       <div class="kgrid">
         <article class="kcard k12"><h3>Técnicos responsáveis <small>chamados do período + em aberto</small></h3>
           ${techRows.length ? `<table class="kt-tbl tech"><thead><tr><th>Responsável</th><th>Volume</th><th class="num">Resolvidos</th><th class="num">Em aberto</th><th class="num">SLA</th><th class="num">TMA</th><th class="num">TME</th><th class="num">Pendente</th></tr></thead><tbody>
-            ${techRows.slice(0, 10).map((t) => `<tr><td class="ell" title="${esc(t.name)}">${esc(t.name)}</td>
+            ${techRows.slice(0, 6).map((t) => `<tr><td class="ell" title="${esc(t.name)}">${esc(t.name)}</td>
               <td><span class="hb-t"><i style="width:${Math.max(3, t.tickets / maxT * 100).toFixed(1)}%;background:var(--series-2)"></i></span><b class="mini">${nf.format(t.tickets)}</b></td>
               <td class="num">${nf.format(t.resolved)}</td><td class="num">${nf.format(t.open)}</td>
               <td class="num" style="color:${slaColor(t.sla_pct)}"><b>${pctTxt(t.sla_pct)}</b></td><td class="num">${dur(t.tma)}</td><td class="num">${dur(t.tme)}</td>
               <td class="num">${t.wait_seconds ? dur(t.wait_seconds) : '—'}</td></tr>`).join('')}</tbody></table>` : '<div class="k-empty">Sem chamados no período.</div>'}</article>
-        <article class="kcard k6"><h3>Chamados que mais duraram</h3>${ticketTable(e.longest.slice(0, 5), links, 'Duração')}</article>
-        <article class="kcard k6"><h3>Chamados que mais ficaram pendentes</h3>${ticketTable(pend.top_tickets.slice(0, 5), links, 'Pendente')}</article>
+        <article class="kcard k6"><h3>Chamados que mais duraram</h3>${ticketTable(e.longest.slice(0, 4), links, 'Duração')}</article>
+        <article class="kcard k6"><h3>Chamados que mais ficaram pendentes</h3>${ticketTable(pend.top_tickets.slice(0, 4), links, 'Pendente')}</article>
         <article class="kcard k12"><h3>Com quem ficou mais tempo pendente <small>soma do tempo de espera por responsável</small></h3>
-          ${hbars(pend.by_tech.map((t) => ({ name: `${t.name} (${t.wait_tickets} chamados)`, value: t.wait_seconds, label: dur(t.wait_seconds) })), { color: 'var(--warning)', empty: 'Nenhum chamado ficou pendente no período.' })}
+          ${hbars(pend.by_tech.slice(0, 5).map((t) => ({ name: `${t.name} (${t.wait_tickets} chamados)`, value: t.wait_seconds, label: dur(t.wait_seconds) })), { color: 'var(--warning)', empty: 'Nenhum chamado ficou pendente no período.' })}
           <p class="kfoot">Total pendente: <b>${dur(pend.total_seconds)}</b> · ${nf.format(pend.now)} pendente(s) agora.</p></article>
       </div>
-      ${foot(4)}
+      ${foot(5)}
     </section>`;
   }
 

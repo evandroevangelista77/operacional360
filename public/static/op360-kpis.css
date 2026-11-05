@@ -62,6 +62,12 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
 .katt.ok { border-color: var(--good); background: rgba(52, 211, 153, 0.1); }
 .kcard h3.sub { margin-top: 14px; }
 
+.kp-logo { display: inline-block; aspect-ratio: 666 / 432; background: currentColor;
+  -webkit-mask: url("/static/oakmont.png") center / contain no-repeat; mask: url("/static/oakmont.png") center / contain no-repeat; }
+.kp-logo-screen { width: 78px; color: #9fc0e8; margin-right: 6px; flex: none; }
+.kpi-head { align-items: center; }
+.kcover, .kphead { display: none; }
+
 /* ---------------- PDF: A4 paisagem, fundo claro, uma folha por bloco */
 @page { size: A4 landscape; margin: 8mm; }
 @media print {
@@ -70,7 +76,7 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
     --series-1: #2a6fd1; --series-2: #d95926; --sev-0: #667791; --sev-1: #2a6fd1; --sev-2: #b7791f; --sev-3: #e07a3a; --sev-4: #d64545; --sev-5: #c2417a; }
   html, body { background: #fff !important; color: var(--text); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.view-kpi .topbar, body.view-kpi .viewtabs, body.view-kpi .filters, body.view-kpi .selbar, body.view-kpi .ticker, body.view-kpi #dash,
-  body.view-kpi .foot, body.view-kpi .grid-bg, body.view-kpi .toast, body.view-kpi .scrim, body.view-kpi .pdrawer, body.view-kpi #kpiPdf { display: none !important; }
+  body.view-kpi .kpi-head, body.view-kpi .foot, body.view-kpi .grid-bg, body.view-kpi .toast, body.view-kpi .scrim, body.view-kpi .pdrawer, body.view-kpi #kpiPdf { display: none !important; }
   body::before, body::after, html::before, html::after { display: none !important; }
   body { background-image: none !important; }
   .kt-tbl th { background: #eef2f8 !important; color: var(--muted) !important; }
@@ -88,7 +94,6 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
   .kfoot { font-size: 8.5px; margin-top: 1.5mm; }
   .kbul { font-size: 9.5px; gap: 1.6mm; } .katt { font-size: 9px; padding: 1.5mm 2.5mm; margin-top: 2mm; background: #fff8e6 !important; } .katt.ok { background: #e9f8f1 !important; } .kcard h3.sub { margin-top: 3mm; }
   .donut { width: 120px; height: 120px; } .kx-chart { max-height: 38mm; }
-  .kpi-head + #kpiBody .kpage:first-child { height: calc(188mm - 22mm); }
   .hb { gap: 1.6mm; } .hb-r { font-size: 9px; } .hb-t { height: 7px; }
   .kt-tbl { font-size: 9px; } .kt-tbl th { font-size: 7.5px; padding: 1mm 1.5mm; } .kt-tbl td { padding: 1.4mm 1.5mm; }
   .lg { font-size: 8.5px; margin-top: 1mm; }
@@ -96,4 +101,29 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
   .kfooter { display: flex; justify-content: space-between; position: absolute; left: 0; right: 0; bottom: 0; padding-top: 1.5mm; border-top: 1px solid var(--ring);
     font-size: 8px; color: var(--muted); }
   a { color: inherit !important; text-decoration: none !important; }
+
+  /* cabeçalho de cada página */
+  .kphead { display: flex; align-items: center; gap: 4mm; padding-bottom: 2.5mm; margin-bottom: 3mm; border-bottom: 2px solid var(--accent); }
+  .kphead .kp-logo { width: 21mm; color: #1b3a6b; flex: none; }
+  .kphead div { display: flex; flex-direction: column; gap: 0.6mm; }
+  .kphead b { font-size: 15px; letter-spacing: -0.01em; color: #0f1f3a; }
+  .kphead span { font-size: 9px; color: var(--muted); }
+  .kfooter { color: #667791; }
+
+  /* capa */
+  .kcover { display: flex; flex-direction: column; justify-content: space-between; position: relative; height: 188mm; overflow: hidden; break-after: page; page-break-after: always;
+    padding: 14mm 16mm 10mm; box-sizing: border-box; color: #fff; border-radius: 3mm;
+    background: linear-gradient(135deg, #0a1b38 0%, #12305e 55%, #087E83 140%) !important; }
+  .kcover::before { content: ""; position: absolute; inset: 0; background: url("/static/arvore.jpg") center / cover no-repeat; opacity: .16; mix-blend-mode: luminosity; }
+  .kcover > * { position: relative; }
+  .kcover .kc-logo { width: 62mm; color: #dbe9fb; }
+  .kc-main { max-width: 190mm; }
+  .kc-tag { display: inline-block; padding: 1.2mm 3.5mm; border: 1px solid rgba(255,255,255,.45); border-radius: 10mm; font-size: 9px; letter-spacing: .22em; text-transform: uppercase; color: #bfe9ec; }
+  .kcover h1 { margin: 5mm 0 3mm; font-size: 34px; line-height: 1.12; font-weight: 700; letter-spacing: -0.015em; color: #fff; }
+  .kc-sub { margin: 0 0 7mm; font-size: 12px; color: #c9d8ee; }
+  .kc-meta { display: flex; gap: 12mm; margin: 0; padding-top: 5mm; border-top: 1px solid rgba(255,255,255,.3); }
+  .kc-meta dt { font-size: 8.5px; letter-spacing: .18em; text-transform: uppercase; color: #9fc0e8; margin-bottom: 1mm; }
+  .kc-meta dd { margin: 0; font-size: 15px; font-weight: 600; color: #fff; max-width: 110mm; }
+  .kc-index { margin: 0; padding-left: 5mm; columns: 2; column-gap: 12mm; font-size: 10.5px; color: #c9d8ee; line-height: 1.8; }
+  .kc-foot { display: flex; justify-content: space-between; font-size: 8.5px; color: #9fc0e8; padding-top: 2mm; border-top: 1px solid rgba(255,255,255,.25); }
 }
