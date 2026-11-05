@@ -14,7 +14,7 @@ if (!\GlpiPlugin\Operacional360\Settings::canView()) {
 }
 
 $isKpi = ($_GET['view'] ?? '') === 'kpi';
-Html::header($isKpi ? "KPI's" : 'Operacional 360', $_SERVER['PHP_SELF'], Menu::SECTOR, $isKpi ? 'operacional360_kpi' : 'operacional360');
+Html::header($isKpi ? "KPI's" : 'Operacional 360', $_SERVER['PHP_SELF'], Menu::SECTOR, 'operacional360');
 
 try {
     Scope::resolve();

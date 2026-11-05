@@ -54,7 +54,13 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
 .kt-tbl:not(.tech) th:nth-child(5), .kt-tbl:not(.tech) td:nth-child(5) { width: 96px; }
 .kt-tbl.tech th:nth-child(1) { width: 24%; } .kt-tbl.tech td:nth-child(2) { display: flex; align-items: center; gap: 8px; }
 .kt-tbl.tech td:nth-child(2) .hb-t { flex: 1; } .kt-tbl .mini { min-width: 32px; text-align: right; font-size: 12px; }
-@media (max-width: 1100px) { .kx-tiles { grid-template-columns: repeat(2, 1fr); } .k4, .k6, .k8 { grid-column: span 12; } }
+@media screen and (max-width: 1100px) { .kx-tiles { grid-template-columns: repeat(2, 1fr); } .k4, .k6, .k8 { grid-column: span 12; } }
+
+.kbul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.kbul b { color: var(--text); }
+.katt { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; border-left: 3px solid var(--warning); background: rgba(250, 178, 25, 0.1); font-size: 12px; color: var(--text-2); }
+.katt.ok { border-color: var(--good); background: rgba(52, 211, 153, 0.1); }
+.kcard h3.sub { margin-top: 14px; }
 
 /* ---------------- PDF: A4 paisagem, fundo claro, uma folha por bloco */
 @page { size: A4 landscape; margin: 8mm; }
@@ -80,6 +86,7 @@ body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.vie
   .kt { padding: 3mm 4mm; } .kt-v { font-size: 20px; } .kt-l { font-size: 8px; } .kt-s { font-size: 8.5px; }
   .kcard { padding: 3mm 4mm; } .kcard h3 { font-size: 10.5px; margin-bottom: 2mm; }
   .kfoot { font-size: 8.5px; margin-top: 1.5mm; }
+  .kbul { font-size: 9.5px; gap: 1.6mm; } .katt { font-size: 9px; padding: 1.5mm 2.5mm; margin-top: 2mm; background: #fff8e6 !important; } .katt.ok { background: #e9f8f1 !important; } .kcard h3.sub { margin-top: 3mm; }
   .donut { width: 120px; height: 120px; } .kx-chart { max-height: 38mm; }
   .kpi-head + #kpiBody .kpage:first-child { height: calc(188mm - 22mm); }
   .hb { gap: 1.6mm; } .hb-r { font-size: 9px; } .hb-t { height: 7px; }

@@ -124,6 +124,36 @@
     const maxT = Math.max(1, ...techRows.map((t) => t.tickets));
     const pend = e.pending;
 
+    // ---- resumo executivo: leitura automática dos números (destaques e pontos de atenção)
+    const bullets = [];
+    const first = (arr) => (arr && arr.length ? arr[0] : null);
+    if (sl.pct != null) bullets.push(`<b>SLA de ${pctTxt(sl.pct)}</b> (${nf.format(sl.ok)} de ${nf.format(sl.n)} chamados resolvidos no prazo) — ${sl.pct >= 95 ? 'dentro da meta de 95%' : `${nf1.format(95 - sl.pct)} p.p. abaixo da meta de 95%`}.`);
+    bullets.push(`<b>${nf.format(k.tickets)} chamados</b> abertos no período; <b>${nf.format(e.volume.resolved)}</b> já resolvidos e <b>${nf.format(k.backlog)}</b> em aberto agora${k.overdue ? `, dos quais <b>${nf.format(k.overdue)}</b> com o prazo vencido` : ''}.`);
+    const topCli = first(e.volume.by_client);
+    if (topCli) bullets.push(`Maior volume de chamados: <b>${esc(topCli.name)}</b> (${nf.format(topCli.n)}, ${nf1.format(topCli.n * 100 / Math.max(1, k.tickets))}% do total).`);
+    const worstCli = sl.by_client.filter((c) => c.n >= 3 && c.pct != null).sort((x, y) => x.pct - y.pct)[0];
+    if (worstCli && worstCli.pct < 95) bullets.push(`Menor SLA entre os clientes: <b>${esc(worstCli.name)}</b> com ${pctTxt(worstCli.pct)} (${nf.format(worstCli.n)} chamados).`);
+    bullets.push(`<b>TME ${dur(k.mttd_glpi)}</b> (primeiro atendimento) e <b>TMA ${dur(k.mttr_glpi)}</b> (resolução) nos chamados do GLPI.`);
+    bullets.push(`<b>${nf.format(k.alerts)} alertas</b> no Zabbix no período; ${nf.format(k.active)} ativos agora, ${nf.format(k.unacked)} sem reconhecimento. <b>MTTD ${dur(k.mttd_zbx)}</b> e <b>MTTR ${dur(k.mttr_zbx)}</b>.`);
+    const topTech = e.techs.filter((t) => t.name !== 'Sem responsável')[0];
+    if (topTech) bullets.push(`Responsável com mais chamados: <b>${esc(topTech.name)}</b> (${nf.format(topTech.tickets)}; SLA ${pctTxt(topTech.sla_pct)}; TMA ${dur(topTech.tma)}).`);
+    const longest = first(e.longest);
+    if (longest) bullets.push(`Chamado que mais durou: <b>#${longest.id}</b> (${esc(longest.client)}) com <b>${dur(longest.seconds)}</b>${longest.open ? ', ainda em aberto' : ''}.`);
+    const waitTech = first(pend.by_tech);
+    if (waitTech) bullets.push(`Maior tempo pendente com <b>${esc(waitTech.name)}</b>: ${dur(waitTech.wait_seconds)} em ${nf.format(waitTech.wait_tickets)} chamado(s); total pendente no período ${dur(pend.total_seconds)}.`);
+    const atencao = [];
+    if (sl.pct != null && sl.pct < 95) atencao.push('SLA abaixo da meta');
+    if (k.overdue) atencao.push(`${nf.format(k.overdue)} chamado(s) vencido(s)`);
+    if (k.unacked) atencao.push(`${nf.format(k.unacked)} alerta(s) ativo(s) sem ACK`);
+    if (e.techs.some((t) => t.name === 'Sem responsável' && t.open)) atencao.push('chamados em aberto sem responsável');
+    const sevMax = sevs.length ? sevs[0] : null;
+    if (sevMax != null && (k.active_by_sev[sevMax] || 0) > 0) atencao.push(`${nf.format(k.active_by_sev[sevMax])} alerta(s) ${SEV[sevMax]} ativo(s)`);
+
+    // alertas: hosts e clientes
+    const hostRows = (d.top_hosts || []).slice(0, 8).map((h) => ({ name: h.host, value: h.alerts, color: 'var(--series-1)' }));
+    const alCli = (d.clients || []).filter((c) => c.alerts).sort((x, y) => y.alerts - x.alerts).slice(0, 8).map((c) => ({ name: c.name, value: c.alerts, color: 'var(--series-1)' }));
+    const foot = (n) => `<footer class="kfooter"><span>Operacional 360 · Relatório executivo de KPI's · ${fdate(f.from)} a ${fdate(f.to)}</span><span>Página ${n} de 4</span></footer>`;
+
     host.innerHTML = `
     <section class="kpage">
       <div class="kx-tiles">
@@ -134,16 +164,25 @@
         ${tile('Alertas Zabbix', nf.format(k.alerts), `${nf.format(k.active)} ativos agora · ${nf.format(k.unacked)} sem ACK`, 'var(--series-1)')}
         ${tile('MTTD Zabbix', dur(k.mttd_zbx), `${nf.format(k.mttd_zbx_n)} alertas · até o ACK`, 'var(--series-1)')}
         ${tile('MTTR Zabbix', dur(k.mttr_zbx), `${nf.format(k.mttr_zbx_n)} alertas · até a normalização`, 'var(--series-1)')}
-        ${tile('Pendente (GLPI)', dur(pend.total_seconds), `${nf.format(pend.now)} chamados pendentes agora · ${nf.format(k.overdue)} atrasados`, 'var(--warning)')}
+        ${tile('Pendente (GLPI)', dur(pend.total_seconds), `${nf.format(pend.now)} pendentes agora · ${nf.format(k.overdue)} atrasados`, 'var(--warning)')}
       </div>
       <div class="kgrid">
+        <article class="kcard k8"><h3>Resumo executivo</h3><ul class="kbul">${bullets.map((b) => `<li>${b}</li>`).join('')}</ul>
+          ${atencao.length ? `<p class="katt"><b>Pontos de atenção:</b> ${atencao.join(' · ')}.</p>` : '<p class="katt ok"><b>Sem pontos críticos</b> nos indicadores do período.</p>'}</article>
         <article class="kcard k4"><h3>SLA geral</h3><div class="kdonut">${donut(sl.pct, slaColor(sl.pct), pctTxt(sl.pct), 'meta 95%')}</div>
           <p class="kfoot">${nf.format(sl.open_late)} chamado(s) em aberto já estouraram o prazo.</p></article>
-        <article class="kcard k4"><h3>SLA por prioridade</h3>${hbars(prioRows, { max: 100 })}</article>
-        <article class="kcard k4"><h3>SLA por cliente <small>(10 maiores)</small></h3>${hbars(cliSla, { max: 100 })}</article>
-        <article class="kcard k12"><h3>Tendência do SLA <small>por dia de solução</small></h3>${slaLine(sl.trend)}</article>
       </div>
-      <footer class="kfooter"><span>Operacional 360 · Relatório executivo de KPI's</span><span>Página 1 de 3</span></footer>
+      ${foot(1)}
+    </section>
+
+    <section class="kpage">
+      <div class="kgrid">
+        <article class="kcard k6"><h3>SLA por prioridade <small>chamados resolvidos</small></h3>${hbars(prioRows, { max: 100 })}</article>
+        <article class="kcard k6"><h3>SLA por cliente <small>10 maiores volumes</small></h3>${hbars(cliSla, { max: 100 })}</article>
+        <article class="kcard k12"><h3>Tendência do SLA <small>por dia de solução · meta de 95%</small></h3>${slaLine(sl.trend)}</article>
+        <article class="kcard k12"><h3>Tempo de resolução <small>chamados resolvidos, por faixa · TMA ${dur(k.mttr_glpi)} · TME ${dur(k.mttd_glpi)}</small></h3>${columns(e.resolution.distribution)}</article>
+      </div>
+      ${foot(2)}
     </section>
 
     <section class="kpage">
@@ -152,13 +191,12 @@
         <article class="kcard k4"><h3>Alertas por severidade <small>(Zabbix)</small></h3>${hbars(sevRows, { empty: 'Sem alertas no período.' })}
           <p class="kfoot">Total no período: <b>${nf.format(k.alerts)}</b></p></article>
         <article class="kcard k4"><h3>Chamados por cliente</h3>${hbars(e.volume.by_client.map((c) => ({ name: c.name, value: c.n })), { color: 'var(--series-2)' })}</article>
-        <article class="kcard k4"><h3>Chamados por categoria</h3>${hbars(e.volume.by_category.map((c) => ({ name: c.name, value: c.n })), { color: 'var(--series-2)' })}</article>
-        <article class="kcard k4"><h3>Chamados por prioridade</h3>${hbars(e.volume.by_priority.map((c) => ({ name: c.name, value: c.n })), { color: 'var(--series-2)' })}</article>
-        <article class="kcard k6"><h3>Tempo de resolução <small>chamados resolvidos, por faixa</small></h3>${columns(e.resolution.distribution)}
-          <p class="kfoot">TMA: <b>${dur(k.mttr_glpi)}</b> · TME: <b>${dur(k.mttd_glpi)}</b></p></article>
-        <article class="kcard k6"><h3>Chamados que mais duraram</h3>${ticketTable(e.longest.slice(0, 5), links, 'Duração')}</article>
+        <article class="kcard k4"><h3>Chamados por categoria</h3>${hbars(e.volume.by_category.map((c) => ({ name: c.name, value: c.n })), { color: 'var(--series-2)' })}
+          <h3 class="sub">Por prioridade</h3>${hbars(e.volume.by_priority.map((c) => ({ name: c.name, value: c.n })), { color: 'var(--series-2)' })}</article>
+        <article class="kcard k4"><h3>Alertas por cliente</h3>${hbars(alCli, { empty: 'Sem alertas no período.' })}
+          <h3 class="sub">Hosts com mais alertas</h3>${hbars(hostRows, { empty: 'Sem alertas no período.' })}</article>
       </div>
-      <footer class="kfooter"><span>Operacional 360 · Relatório executivo de KPI's</span><span>Página 2 de 3</span></footer>
+      ${foot(3)}
     </section>
 
     <section class="kpage">
@@ -170,12 +208,13 @@
               <td class="num">${nf.format(t.resolved)}</td><td class="num">${nf.format(t.open)}</td>
               <td class="num" style="color:${slaColor(t.sla_pct)}"><b>${pctTxt(t.sla_pct)}</b></td><td class="num">${dur(t.tma)}</td><td class="num">${dur(t.tme)}</td>
               <td class="num">${t.wait_seconds ? dur(t.wait_seconds) : '—'}</td></tr>`).join('')}</tbody></table>` : '<div class="k-empty">Sem chamados no período.</div>'}</article>
+        <article class="kcard k6"><h3>Chamados que mais duraram</h3>${ticketTable(e.longest.slice(0, 5), links, 'Duração')}</article>
         <article class="kcard k6"><h3>Chamados que mais ficaram pendentes</h3>${ticketTable(pend.top_tickets.slice(0, 5), links, 'Pendente')}</article>
-        <article class="kcard k6"><h3>Com quem ficou mais tempo pendente <small>soma do tempo de espera</small></h3>
-          ${hbars(pend.by_tech.map((t) => ({ name: `${t.name} (${t.wait_tickets})`, value: t.wait_seconds, label: dur(t.wait_seconds) })), { color: 'var(--warning)', empty: 'Nenhum chamado ficou pendente no período.' })}
+        <article class="kcard k12"><h3>Com quem ficou mais tempo pendente <small>soma do tempo de espera por responsável</small></h3>
+          ${hbars(pend.by_tech.map((t) => ({ name: `${t.name} (${t.wait_tickets} chamados)`, value: t.wait_seconds, label: dur(t.wait_seconds) })), { color: 'var(--warning)', empty: 'Nenhum chamado ficou pendente no período.' })}
           <p class="kfoot">Total pendente: <b>${dur(pend.total_seconds)}</b> · ${nf.format(pend.now)} pendente(s) agora.</p></article>
       </div>
-      <footer class="kfooter"><span>Operacional 360 · Relatório executivo de KPI's</span><span>Página 3 de 3</span></footer>
+      ${foot(4)}
     </section>`;
   }
 
