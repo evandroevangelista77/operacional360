@@ -52,6 +52,11 @@
   <div class="countdown" aria-hidden="true"><span id="countdown"></span></div>
 </header>
 
+<nav class="viewtabs" id="viewTabs" role="tablist" aria-label="Visões do painel">
+  <button type="button" role="tab" data-view="painel" class="on" aria-selected="true">Painel</button>
+  <button type="button" role="tab" data-view="kpi" aria-selected="false">KPI's</button>
+</nav>
+
 <form class="filters" id="filters" autocomplete="off">
   <div class="presets" role="group" aria-label="Período">
     <button type="button" data-preset="today">Hoje</button>
@@ -200,6 +205,14 @@
   <span><span data-sevt="Alertas: {L}">Alertas: Desastre, Alta e Atenção</span> · Chamados: cliente(s) selecionado(s) · MTTD Zabbix = início → 1º reconhecimento, GLPI = abertura → 1º atendimento · MTTR Zabbix = início → recuperação, GLPI = abertura → solução · Atrasado = prazo de solução do GLPI vencido</span>
 </footer>
 
+<section class="kpiview" id="kpiView" hidden aria-label="KPI's">
+  <div class="kpi-head">
+    <div class="kpi-title"><span class="kpi-brand">Operacional <b>360°</b></span><h2>Relatório executivo de KPI's</h2><p id="kpiMeta"></p></div>
+    <button type="button" class="primary" id="kpiPdf" title="Abre a impressão em paisagem: escolha &quot;Salvar como PDF&quot;">Gerar PDF (paisagem)</button>
+  </div>
+  <div id="kpiBody"></div>
+</section>
+
 <div class="scrim" id="scrim"></div>
 <aside class="pdrawer" id="drawer" aria-hidden="true" role="dialog" aria-labelledby="dT">
   <div class="dh"><div class="dtt"><span class="dico" id="dIco"></span><h3 id="dT"></h3></div>
@@ -214,6 +227,8 @@
 
 <script src="/static/app.js"></script>
 <link rel="stylesheet" href="/static/op360-alertas.css">
+<link rel="stylesheet" href="/static/op360-kpis.css">
 <script src="/static/op360-alertas.js"></script>
+<script src="/static/op360-kpis.js"></script>
 </body>
 </html>

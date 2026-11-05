@@ -158,7 +158,8 @@ class GlpiRest
         $solveDelay = $opt['glpi_tickets.solve_delay_stat'] ?? null;
         $takeDelay = $opt['glpi_tickets.takeintoaccount_delay_stat'] ?? null;
         $fields = array_values(self::F);
-        foreach ([$solveDelay, $takeDelay] as $f) {
+        $waitDelay = $opt['glpi_tickets.waiting_duration'] ?? null;
+        foreach ([$solveDelay, $takeDelay, $waitDelay] as $f) {
             if ($f !== null) {
                 $fields[] = $f;
             }
@@ -178,7 +179,7 @@ class GlpiRest
             $res = self::get('/search/Ticket', $q);
             $data = is_array($res['data'] ?? null) ? $res['data'] : [];
             foreach ($data as $d) {
-                $rows[] = self::row($d, $solveDelay, $takeDelay);
+                $rows[] = self::row($d, $solveDelay, $takeDelay, $waitDelay);
             }
             if (count($data) < $page || count($rows) >= (int) ($res['totalcount'] ?? 0)) {
                 break;
@@ -193,7 +194,7 @@ class GlpiRest
         return is_array($v) ? implode(', ', array_filter(array_map('strval', $v), fn ($x) => $x !== '')) : (string) ($v ?? '');
     }
 
-    private static function row(array $d, ?int $solveDelay, ?int $takeDelay): array
+    private static function row(array $d, ?int $solveDelay, ?int $takeDelay, ?int $waitDelay = null): array
     {
         $date = (string) ($d[self::F['date']] ?? '');
         $solve = $d[self::F['solvedate']] ?? null;
@@ -211,6 +212,7 @@ class GlpiRest
             'time_to_resolve'            => $ttr ?: null,
             'solve_delay_stat'           => $resolve,
             'takeintoaccount_delay_stat' => $takeDelay !== null ? (int) ($d[$takeDelay] ?? 0) : 0,
+            'waiting_duration'           => $waitDelay !== null ? (int) ($d[$waitDelay] ?? 0) : 0,
             'entity'                     => Glpi::norm(self::text($d[self::F['entity']] ?? '')),
             'category'                   => self::text($d[self::F['category']] ?? ''),
             'group'                      => self::text($d[self::F['group']] ?? ''),

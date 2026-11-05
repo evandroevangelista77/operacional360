@@ -250,6 +250,7 @@ class Api
                 'hosts' => count($hostCards), 'hosts_online' => count(array_filter($hostCards, fn ($h) => $h['status'] === 'online')),
                 'hosts_offline' => count(array_filter($hostCards, fn ($h) => $h['status'] === 'offline')),
             ],
+            'exec'                => self::executive($P, $O, $events, $now),
             'clients'             => array_values($agg),
             'folders'             => $scope['folders'],
             'hostgroups'          => array_map(fn ($g) => ['id' => $g['group_id'], 'name' => $g['group_name'], 'client' => $g['client']], $scope['all_groups']),
@@ -521,6 +522,169 @@ class Api
 
     /* ------------------------------------------------------------------ utilidades */
 
+    /**
+     * Indicadores da aba "KPI's": SLA, volumetria, tempos (TME/TMA/MTTD/MTTR), alertas, responsáveis,
+     * chamados mais longos e tempo pendente. Calculado sobre o que está filtrado na tela.
+     * @param array[] $P chamados abertos no período; $O chamados em aberto agora; $events alertas do período
+     */
+    private static function executive(array $P, array $O, array $events, int $now): array
+    {
+        $pct = fn (int $ok, int $n): ?float => $n > 0 ? round($ok * 100 / $n, 1) : null;
+        $techs = fn (array $t): array => array_values(array_filter(array_map('trim', explode(',', (string) $t['tech'])))) ?: ['Sem responsável'];
+
+        // ---- SLA: chamados resolvidos no período, dentro da meta (prioridade → horas)
+        $resolved = array_values(array_filter($P, fn ($t) => $t['sla_ok'] !== null));
+        $slaOk = count(array_filter($resolved, fn ($t) => $t['sla_ok']));
+        $byPrio = [];
+        foreach ($resolved as $t) {
+            $p = &$byPrio[$t['priority']];
+            $p ??= ['priority' => $t['priority'], 'priority_id' => $t['priority_id'], 'n' => 0, 'ok' => 0];
+            $p['n']++;
+            $p['ok'] += $t['sla_ok'] ? 1 : 0;
+            unset($p);
+        }
+        $byPrio = array_values($byPrio);
+        usort($byPrio, fn ($a, $b) => $b['priority_id'] <=> $a['priority_id']);
+        foreach ($byPrio as &$p) {
+            $p['pct'] = $pct($p['ok'], $p['n']);
+        }
+        unset($p);
+        $slaDay = [];
+        foreach ($resolved as $t) {
+            $d = substr((string) $t['solvedate'], 0, 10);
+            $slaDay[$d]['n'] = ($slaDay[$d]['n'] ?? 0) + 1;
+            $slaDay[$d]['ok'] = ($slaDay[$d]['ok'] ?? 0) + ($t['sla_ok'] ? 1 : 0);
+        }
+        ksort($slaDay);
+        $slaTrend = [];
+        foreach ($slaDay as $d => $v) {
+            $slaTrend[] = ['day' => $d, 'pct' => $pct($v['ok'], $v['n']), 'n' => $v['n']];
+        }
+        $slaClient = [];
+        foreach ($resolved as $t) {
+            $c = &$slaClient[$t['client']];
+            $c ??= ['name' => $t['client'], 'n' => 0, 'ok' => 0];
+            $c['n']++;
+            $c['ok'] += $t['sla_ok'] ? 1 : 0;
+            unset($c);
+        }
+        $slaClient = array_values($slaClient);
+        foreach ($slaClient as &$c) {
+            $c['pct'] = $pct($c['ok'], $c['n']);
+        }
+        unset($c);
+        usort($slaClient, fn ($a, $b) => $b['n'] <=> $a['n']);
+
+        // ---- volumetria
+        $byPrioVol = [];
+        $byCat = [];
+        $byClient = [];
+        foreach ($P as $t) {
+            $byPrioVol[$t['priority']] = ($byPrioVol[$t['priority']] ?? 0) + 1;
+            $cat = $t['category'] !== '' ? $t['category'] : 'Sem categoria';
+            $byCat[$cat] = ($byCat[$cat] ?? 0) + 1;
+            $byClient[$t['client']] = ($byClient[$t['client']] ?? 0) + 1;
+        }
+        arsort($byCat);
+        arsort($byClient);
+        $top = fn (array $m, int $n): array => array_map(fn ($k, $v) => ['name' => (string) $k, 'n' => $v], array_slice(array_keys($m), 0, $n), array_slice(array_values($m), 0, $n));
+
+        // ---- tempo de resolução em faixas
+        $buckets = [['≤ 1 h', 3600], ['1–4 h', 4 * 3600], ['4–8 h', 8 * 3600], ['8–24 h', 24 * 3600], ['1–3 dias', 72 * 3600], ['> 3 dias', PHP_INT_MAX]];
+        $dist = array_map(fn ($b) => ['label' => $b[0], 'n' => 0], $buckets);
+        foreach ($P as $t) {
+            if ($t['solvedate'] && $t['resolve_seconds'] !== null) {
+                foreach ($buckets as $i => [, $lim]) {
+                    if ($t['resolve_seconds'] <= $lim) {
+                        $dist[$i]['n']++;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // ---- responsáveis (técnicos): chamados do período + abertos agora
+        $tech = [];
+        $seen = [];
+        foreach (array_merge($P, $O) as $t) {
+            if (isset($seen[$t['id']])) {
+                continue;
+            }
+            $seen[$t['id']] = true;
+            foreach ($techs($t) as $name) {
+                $r = &$tech[$name];
+                $r ??= ['name' => $name, 'tickets' => 0, 'resolved' => 0, 'open' => 0, 'sla_n' => 0, 'sla_ok' => 0, 'resolve_sum' => 0, 'resolve_n' => 0,
+                    'take_sum' => 0, 'take_n' => 0, 'wait_seconds' => 0, 'wait_tickets' => 0];
+                $r['tickets']++;
+                $r['open'] += $t['open'] ? 1 : 0;
+                if ($t['solvedate']) {
+                    $r['resolved']++;
+                    $r['resolve_sum'] += (int) $t['resolve_seconds'];
+                    $r['resolve_n']++;
+                }
+                if ($t['sla_ok'] !== null) {
+                    $r['sla_n']++;
+                    $r['sla_ok'] += $t['sla_ok'] ? 1 : 0;
+                }
+                if ($t['take_seconds'] > 0) {
+                    $r['take_sum'] += $t['take_seconds'];
+                    $r['take_n']++;
+                }
+                if ($t['wait_seconds'] > 0) {
+                    $r['wait_seconds'] += $t['wait_seconds'];
+                    $r['wait_tickets']++;
+                }
+                unset($r);
+            }
+        }
+        $techRows = [];
+        foreach ($tech as $r) {
+            $techRows[] = ['name' => $r['name'], 'tickets' => $r['tickets'], 'resolved' => $r['resolved'], 'open' => $r['open'],
+                'sla_pct' => $pct($r['sla_ok'], $r['sla_n']), 'tma' => $r['resolve_n'] ? round($r['resolve_sum'] / $r['resolve_n']) : null,
+                'tme' => $r['take_n'] ? round($r['take_sum'] / $r['take_n']) : null, 'wait_seconds' => $r['wait_seconds'], 'wait_tickets' => $r['wait_tickets']];
+        }
+        usort($techRows, fn ($a, $b) => $b['tickets'] <=> $a['tickets']);
+        $waitRows = array_values(array_filter($techRows, fn ($r) => $r['wait_seconds'] > 0));
+        usort($waitRows, fn ($a, $b) => $b['wait_seconds'] <=> $a['wait_seconds']);
+
+        // ---- chamados que mais duraram (resolvidos: abertura → solução; em aberto: abertura → agora) e que mais ficaram pendentes
+        $all = [];
+        foreach (array_merge($P, $O) as $t) {
+            $all[$t['id']] = $t;
+        }
+        $dur = fn (array $t): int => $t['solvedate'] ? (int) $t['resolve_seconds'] : max(0, $now - (int) strtotime($t['date']));
+        $mini = fn (array $t, int $secs): array => ['id' => $t['id'], 'name' => $t['name'], 'client' => $t['client'], 'tech' => $t['tech'],
+            'status' => $t['status'], 'priority' => $t['priority'], 'seconds' => $secs, 'open' => $t['open'], 'date' => $t['date']];
+        $longest = array_values($all);
+        usort($longest, fn ($a, $b) => $dur($b) <=> $dur($a));
+        $longest = array_map(fn ($t) => $mini($t, $dur($t)), array_slice($longest, 0, 8));
+        $waited = array_values(array_filter($all, fn ($t) => $t['wait_seconds'] > 0));
+        usort($waited, fn ($a, $b) => $b['wait_seconds'] <=> $a['wait_seconds']);
+        $waited = array_map(fn ($t) => $mini($t, $t['wait_seconds']), array_slice($waited, 0, 8));
+        $pendingNow = array_values(array_filter($O, fn ($t) => $t['pending']));
+
+        // ---- alertas (Zabbix) do período por dia e por host group/cliente fica nos KPIs do painel; aqui o resumo
+        $perDay = [];
+        foreach ($events as $e) {
+            $d = date('Y-m-d', $e['clock']);
+            $perDay[$d] = ($perDay[$d] ?? 0) + 1;
+        }
+
+        return [
+            'sla' => ['n' => count($resolved), 'ok' => $slaOk, 'pct' => $pct($slaOk, count($resolved)), 'by_priority' => $byPrio,
+                'trend' => $slaTrend, 'by_client' => array_slice($slaClient, 0, 10),
+                'open_late' => count(array_filter($O, fn ($t) => $t['late'])), 'open' => count($O)],
+            'volume' => ['tickets' => count($P), 'resolved' => count(array_filter($P, fn ($t) => (bool) $t['solvedate'])),
+                'by_priority' => array_map(fn ($k, $v) => ['name' => (string) $k, 'n' => $v], array_keys($byPrioVol), array_values($byPrioVol)),
+                'by_category' => $top($byCat, 8), 'by_client' => $top($byClient, 10)],
+            'resolution' => ['distribution' => $dist],
+            'techs' => array_slice($techRows, 0, 15),
+            'pending' => ['now' => count($pendingNow), 'total_seconds' => array_sum(array_column($all, 'wait_seconds')),
+                'by_tech' => array_slice($waitRows, 0, 8), 'top_tickets' => $waited],
+            'longest' => $longest,
+        ];
+    }
+
     /** Linha do chamado com entidade (cliente), atraso e pendência calculados. */
     private static function ticketRow(array $t, int $now, string $root): array
     {
@@ -532,7 +696,7 @@ class Api
         return ['id' => $t['id'], 'name' => $t['name'], 'status' => Glpi::STATUS[$st] ?? (string) $st, 'status_id' => $st,
             'priority' => Glpi::PRIORITY[$t['priority']] ?? (string) $t['priority'], 'priority_id' => $t['priority'],
             'entity' => $t['entity'], 'client' => Glpi::clientOf((string) $t['entity'], $root), 'category' => $t['category'], 'date' => $t['date'],
-            'solvedate' => $t['solvedate'], 'resolve_seconds' => $t['solvedate'] ? $t['solve_delay_stat'] : null, 'take_seconds' => $t['takeintoaccount_delay_stat'],
+            'solvedate' => $t['solvedate'], 'resolve_seconds' => $t['solvedate'] ? $t['solve_delay_stat'] : null, 'take_seconds' => $t['takeintoaccount_delay_stat'], 'wait_seconds' => (int) ($t['waiting_duration'] ?? 0),
             'sla_ok' => $slaOk, 'sla_target' => date('Y-m-d H:i:s', $target), 'due' => $ttr ? date('Y-m-d H:i:s', $ttr) : null,
             'group' => $t['group'] !== '' ? $t['group'] : 'Sem grupo', 'tech' => $t['tech'] !== '' ? $t['tech'] : 'Sem responsável',
             'open' => $st < 5, 'pending' => $st === 4, 'late' => $st < 5 && $ttr !== null && $ttr < $now];

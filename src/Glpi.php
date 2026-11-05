@@ -277,6 +277,7 @@ class Glpi
                 'time_to_resolve'           => $r['time_to_resolve'] ?: null,
                 'solve_delay_stat'          => (int) $r['solve_delay_stat'],
                 'takeintoaccount_delay_stat' => (int) $r['takeintoaccount_delay_stat'],
+                'waiting_duration'          => (int) ($r['waiting_duration'] ?? 0),
                 'entity'                    => $entities[(int) $r['entities_id']] ?? '',
                 'category'                  => $categories[(int) ($r['itilcategories_id'] ?? 0)] ?? '',
                 'group'                     => implode(', ', array_filter($groupOf[$id] ?? [])),

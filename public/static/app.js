@@ -168,6 +168,7 @@
   /* ---------------- render */
   function render(d) {
     const k = d.kpi, int = (x) => nf.format(Math.round(x));
+    document.dispatchEvent(new CustomEvent('op360:data', { detail: d }));
     applySeverities(d.severities);
     SHOWN.forEach((sv) => {
       const n = k.alerts_by_sev[sv] ?? 0, a = k.active_by_sev[sv] ?? 0;

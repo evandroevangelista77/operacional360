@@ -1,0 +1,92 @@
+/* Aba "KPI's" (tela e PDF em paisagem) */
+.viewtabs { display: flex; gap: 4px; padding: 8px 24px 0; border-bottom: 1px solid var(--ring); background: rgba(8, 20, 43, 0.5); }
+.viewtabs button { min-height: 36px; padding: 0 20px; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; background: transparent;
+  color: var(--muted); font-weight: 600; cursor: pointer; letter-spacing: 0.02em; }
+.viewtabs button:hover { color: var(--text); }
+.viewtabs button.on { color: var(--text); background: var(--surface); border-color: var(--ring); box-shadow: inset 0 3px 0 var(--accent); }
+
+body.view-kpi #dash, body.view-kpi .ticker, body.view-kpi #detailPanel, body.view-kpi .foot { display: none; }
+.kpiview[hidden] { display: none; }
+.kpiview { padding: 18px 24px 40px; max-width: 1500px; margin: 0 auto; }
+.kpi-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.kpi-brand { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent-text); }
+.kpi-brand b { color: var(--text); }
+.kpi-title h2 { margin: 2px 0 4px; font-size: 24px; letter-spacing: -0.01em; }
+.kpi-title p { margin: 0; color: var(--text-2); font-size: 12.5px; line-height: 1.5; max-width: 980px; }
+#kpiPdf { min-height: 38px; padding: 0 18px; border-radius: 8px; cursor: pointer; background: var(--accent); border: 1px solid var(--accent); color: #fff; font-weight: 600; }
+
+.kpage { margin-bottom: 22px; }
+.kx-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.kt { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 12px; background: var(--surface);
+  border: 1px solid var(--ring); border-top: 3px solid var(--c); }
+.kt-l { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.kt-v { font-size: 30px; line-height: 1.1; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.kt-s { font-size: 11.5px; color: var(--text-2); }
+.kgrid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+.kcard { padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--ring); min-width: 0; }
+.kcard h3 { margin: 0 0 10px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; color: var(--text); }
+.kcard h3 small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.k4 { grid-column: span 4; } .k6 { grid-column: span 6; } .k8 { grid-column: span 8; } .k12 { grid-column: span 12; }
+.kfoot { margin: 8px 0 0; font-size: 11.5px; color: var(--text-2); }
+.kfooter { display: none; }
+.k-empty { padding: 18px 4px; color: var(--muted); font-size: 12.5px; }
+.kdonut { display: flex; justify-content: center; }
+.donut { width: 168px; height: 168px; }
+.dn-v { font: 700 24px var(--font); fill: var(--text); } .dn-s { font: 11px var(--font); fill: var(--muted); }
+.kx-chart { width: 100%; height: auto; display: block; }
+.kx-chart .gl { stroke: var(--grid); stroke-width: 1; } .kx-chart .ax { font: 10px var(--font); fill: var(--muted); } .kx-chart .ax.b { fill: var(--text); font-weight: 700; }
+.lg { display: flex; gap: 16px; margin-top: 6px; font-size: 11.5px; color: var(--text-2); }
+.lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.hb { display: flex; flex-direction: column; gap: 7px; }
+.hb-r { display: grid; grid-template-columns: minmax(80px, 38%) 1fr auto; align-items: center; gap: 10px; font-size: 12px; }
+.hb-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.hb-t { display: block; height: 10px; border-radius: 6px; background: var(--grid); overflow: hidden; }
+.hb-t i { display: block; height: 100%; border-radius: 6px; }
+.hb-v { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+.kt-tbl { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.kt-tbl th { text-align: left; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--ring); }
+.kt-tbl td { padding: 6px; border-bottom: 1px solid var(--grid); color: var(--text-2); vertical-align: middle; }
+.kt-tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+.kt-tbl .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kt-tbl td b { color: var(--text); } .kt-tbl em { font-style: normal; font-size: 10px; color: var(--warning); margin-left: 4px; }
+.kt-tbl a { color: var(--accent-text); text-decoration: none; }
+.kt-tbl:not(.tech) th:nth-child(1), .kt-tbl:not(.tech) td:nth-child(1) { width: 62px; }
+.kt-tbl:not(.tech) th:nth-child(5), .kt-tbl:not(.tech) td:nth-child(5) { width: 96px; }
+.kt-tbl.tech th:nth-child(1) { width: 24%; } .kt-tbl.tech td:nth-child(2) { display: flex; align-items: center; gap: 8px; }
+.kt-tbl.tech td:nth-child(2) .hb-t { flex: 1; } .kt-tbl .mini { min-width: 32px; text-align: right; font-size: 12px; }
+@media (max-width: 1100px) { .kx-tiles { grid-template-columns: repeat(2, 1fr); } .k4, .k6, .k8 { grid-column: span 12; } }
+
+/* ---------------- PDF: A4 paisagem, fundo claro, uma folha por bloco */
+@page { size: A4 landscape; margin: 8mm; }
+@media print {
+  :root { color-scheme: light; --page: #fff; --surface: #fff; --surface-2: #f3f6fb; --ring: #cfd8e6; --text: #0f1f3a; --text-2: #34465f; --muted: #667791;
+    --grid: #e3e9f2; --accent: #087E83; --accent-text: #087E83; --good: #15935f; --warning: #b7791f; --critical: #c53030;
+    --series-1: #2a6fd1; --series-2: #d95926; --sev-0: #667791; --sev-1: #2a6fd1; --sev-2: #b7791f; --sev-3: #e07a3a; --sev-4: #d64545; --sev-5: #c2417a; }
+  html, body { background: #fff !important; color: var(--text); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.view-kpi .topbar, body.view-kpi .viewtabs, body.view-kpi .filters, body.view-kpi .selbar, body.view-kpi .ticker, body.view-kpi #dash,
+  body.view-kpi .foot, body.view-kpi .grid-bg, body.view-kpi .toast, body.view-kpi .scrim, body.view-kpi .pdrawer, body.view-kpi #kpiPdf { display: none !important; }
+  body::before, body::after, html::before, html::after { display: none !important; }
+  body { background-image: none !important; }
+  .kt-tbl th { background: #eef2f8 !important; color: var(--muted) !important; }
+  .kpiview { padding: 0; max-width: none; margin: 0; }
+  .kpi-head { margin-bottom: 4mm; padding-bottom: 3mm; border-bottom: 2px solid var(--accent); }
+  .kpi-title h2 { font-size: 19px; margin: 1px 0 2px; } .kpi-title p { font-size: 9.5px; }
+  .kpi-brand { font-size: 9px; }
+  .kpage { break-after: page; page-break-after: always; margin: 0; position: relative; height: 188mm; display: flex; flex-direction: column; overflow: hidden; }
+  .kpage:last-child { break-after: auto; page-break-after: auto; }
+  .kpage + .kpage { padding-top: 0; }
+  .kcard, .kt { box-shadow: none; break-inside: avoid; background: #fff; }
+  .kx-tiles { gap: 3mm; margin-bottom: 3mm; } .kgrid { gap: 3mm; }
+  .kt { padding: 3mm 4mm; } .kt-v { font-size: 20px; } .kt-l { font-size: 8px; } .kt-s { font-size: 8.5px; }
+  .kcard { padding: 3mm 4mm; } .kcard h3 { font-size: 10.5px; margin-bottom: 2mm; }
+  .kfoot { font-size: 8.5px; margin-top: 1.5mm; }
+  .donut { width: 120px; height: 120px; } .kx-chart { max-height: 38mm; }
+  .kpi-head + #kpiBody .kpage:first-child { height: calc(188mm - 22mm); }
+  .hb { gap: 1.6mm; } .hb-r { font-size: 9px; } .hb-t { height: 7px; }
+  .kt-tbl { font-size: 9px; } .kt-tbl th { font-size: 7.5px; padding: 1mm 1.5mm; } .kt-tbl td { padding: 1.4mm 1.5mm; }
+  .lg { font-size: 8.5px; margin-top: 1mm; }
+  .k-empty { font-size: 9px; padding: 3mm 0; }
+  .kfooter { display: flex; justify-content: space-between; position: absolute; left: 0; right: 0; bottom: 0; padding-top: 1.5mm; border-top: 1px solid var(--ring);
+    font-size: 8px; color: var(--muted); }
+  a { color: inherit !important; text-decoration: none !important; }
+}
